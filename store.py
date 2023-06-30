@@ -55,8 +55,8 @@ class Store:
             "footprint",
             "lcsc",
             "stock",
-            "exclude_from_bom",
-            "exclude_from_pos",
+            "bomcheck",
+            "poscheck",
         ]
         if self.order_by == order_by[n] and self.order_dir == "ASC":
             self.order_dir = "DESC"
@@ -76,8 +76,8 @@ class Store:
                     "lcsc TEXT,"
                     "manufacturer TEXT,"
                     "description TEXT,"
-                    "bomcheck TEXT DEFAULT 0,"
-                    "poscheck TEXT DEFAULT 0,"
+                    "bomcheck INT DEFAULT 1,"
+                    "poscheck INT DEFAULT 1,"
                     "rotation TEXT,"
                     "side TEXT"
                     ")",
@@ -101,9 +101,10 @@ class Store:
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
                 # Query all parts that are supposed to be in the BOM an have an lcsc number, group the references together
-                #subquery = "SELECT value, reference, footprint, lcsc FROM part_info WHERE exclude_from_bom = '0' AND lcsc != '' ORDER BY lcsc, reference"
-                query = "SELECT GROUP_CONCAT(reference) AS refs, value, footprint, lcsc, GROUP_CONCAT(manufacturer) AS manu, \
-                GROUP_CONCAT(description) AS desc FROM part_info GROUP BY value, footprint, lcsc"
+                #subquery = "SELECT value, reference, footprint, lcsc FROM part_info WHERE bomcheck = '0' AND lcsc != '' ORDER BY lcsc, reference"
+                query = "SELECT GROUP_CONCAT(reference), value, footprint, lcsc, GROUP_CONCAT(manufacturer), \
+                GROUP_CONCAT(description), GROUP_CONCAT(bomcheck), GROUP_CONCAT(poscheck), GROUP_CONCAT(rotation), \
+                GROUP_CONCAT(side) FROM part_info GROUP BY value, footprint, lcsc"
                 a = [list(part) for part in cur.execute(query).fetchall()]
 
                 return a
@@ -113,11 +114,11 @@ class Store:
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
                 # Query all parts that are supposed to be in the BOM an have an lcsc number, group the references together
-                subquery = "SELECT value, reference, footprint, lcsc FROM part_info WHERE exclude_from_bom = '0' AND lcsc != '' ORDER BY lcsc, reference"
+                subquery = "SELECT value, reference, footprint, lcsc FROM part_info WHERE bomcheck = '0' AND lcsc != '' ORDER BY lcsc, reference"
                 query = f"SELECT value, GROUP_CONCAT(reference) AS refs, footprint, lcsc  FROM ({subquery}) GROUP BY lcsc"
                 a = [list(part) for part in cur.execute(query).fetchall()]
                 # Query all parts that are supposed to be in the BOM but have no lcsc number
-                query = "SELECT value, reference, footprint, lcsc FROM part_info WHERE exclude_from_bom = '0' AND lcsc = ''"
+                query = "SELECT value, reference, footprint, lcsc FROM part_info WHERE bomcheck = '0' AND lcsc = ''"
                 b = [list(part) for part in cur.execute(query).fetchall()]
                 return a + b
 
@@ -127,7 +128,7 @@ class Store:
             con.create_collation("naturalsort", natural_sort_collation)
             with con as cur:
                 # Query all parts that are supposed to be in the POS
-                query = "SELECT reference, value, footprint FROM part_info WHERE exclude_from_pos = '0' ORDER BY reference COLLATE naturalsort ASC"
+                query = "SELECT reference, value, footprint FROM part_info WHERE poscheck = '0' ORDER BY reference COLLATE naturalsort ASC"
                 return [list(part) for part in cur.execute(query).fetchall()]
 
     def create_part(self, part):
@@ -149,7 +150,7 @@ class Store:
                     )
                 else:
                     cur.execute(
-                        "UPDATE part_info set value = ?, footprint = ?, exclude_from_bom = ?, exclude_from_pos = ? WHERE reference = ?",
+                        "UPDATE part_info set value = ?, footprint = ?, bomcheck = ?, poscheck = ? WHERE reference = ?",
                         part[1:] + part[0:1],
                     )
 
@@ -184,7 +185,7 @@ class Store:
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
                 cur.execute(
-                    f"UPDATE part_info SET exclude_from_bom = '{int(state)}' WHERE reference = '{ref}'"
+                    f"UPDATE part_info SET bomcheck = {int(state)} WHERE reference = '{ref}'"
                 )
                 cur.commit()
 
@@ -193,7 +194,7 @@ class Store:
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
                 cur.execute(
-                    f"UPDATE part_info SET exclude_from_pos = '{int(state)}' WHERE reference = '{ref}'"
+                    f"UPDATE part_info SET poscheck = {int(state)} WHERE reference = '{ref}'"
                 )
                 cur.commit()
 
@@ -217,8 +218,10 @@ class Store:
                 get_lcsc_value(fp),
                 '',
                 '',
-                get_exclude_from_bom(fp),
-                get_exclude_from_pos(fp),
+                1,
+                1,
+                #get_exclude_from_bom(fp),
+                #get_exclude_from_pos(fp),
                 '',
                 '',
             ]

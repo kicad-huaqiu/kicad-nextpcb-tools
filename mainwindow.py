@@ -265,9 +265,6 @@ class JLCPCBTools(wx.Dialog):
 
         self.upper_toolbar.Realize()
 
-        #self.Bind(wx.EVT_COMBOBOX, self.group_parts, self.cb_group_strategy)
-        #self.Bind(wx.EVT_TEXT, self.group_parts, self.cb_group_strategy)
-        #self.cb_group_strategy.Bind(wx.EVT_COMBOBOX, self.group_parts)
         self.Bind(wx.EVT_COMBOBOX, self.group_parts, self.cb_group_strategy)
         self.Bind(wx.EVT_TOOL, self.auto_match_parts, self.auto_match_button)
         self.Bind(wx.EVT_TOOL, self.generate_fabrication_data, self.generate_button)
@@ -436,8 +433,8 @@ class JLCPCBTools(wx.Dialog):
         self.Bind(wx.EVT_TOOL, self.remove_part, self.remove_part_button)
         self.Bind(wx.EVT_TOOL, self.select_alike, self.select_alike_button)
         #self.Bind(wx.EVT_TOOL, self.toggle_bom_pos, self.toggle_bom_pos_button)
-        self.Bind(wx.EVT_TOOL, self.toggle_bom, self.toggle_bom_button)
-        self.Bind(wx.EVT_TOOL, self.toggle_pos, self.toggle_pos_button)
+        #self.Bind(wx.EVT_TOOL, self.toggle_bom, self.toggle_bom_button)
+        #self.Bind(wx.EVT_TOOL, self.toggle_pos, self.toggle_pos_button)
         self.Bind(wx.EVT_TOOL, self.get_part_details, self.part_details_button)
         #self.Bind(wx.EVT_TOOL, self.OnBomHide, self.hide_bom_button)
         #self.Bind(wx.EVT_TOOL, self.OnPosHide, self.hide_pos_button)
@@ -528,14 +525,14 @@ class JLCPCBTools(wx.Dialog):
             align=wx.ALIGN_CENTER,
             flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
         )
-        self.bom = self.footprint_list.AppendIconTextColumn(
+        self.bom = self.footprint_list.AppendToggleColumn(
             "BOM",
             mode=wx.dataview.DATAVIEW_CELL_ACTIVATABLE,
             width=int(self.scale_factor * 60),
             align=wx.ALIGN_CENTER,
             flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
         )
-        self.pos = self.footprint_list.AppendIconTextColumn(
+        self.pos = self.footprint_list.AppendToggleColumn(
             "POS",
             mode=wx.dataview.DATAVIEW_CELL_ACTIVATABLE,
             width=int(self.scale_factor * 60),
@@ -580,7 +577,7 @@ class JLCPCBTools(wx.Dialog):
         )
 
         
-        #self.Bind(wx.dataview.EVT_DATAVIEW_ITEM_VALUE_CHANGED, self.toggle_update_to_db, self.bom)
+        self.footprint_list.Bind(wx.dataview.EVT_DATAVIEW_ITEM_VALUE_CHANGED, self.toggle_update_to_db)
 
         table_sizer.Add(self.down_toolbar, 1, wx.ALL | wx.EXPAND, 5)
         # ---------------------------------------------------------------------
@@ -686,6 +683,7 @@ class JLCPCBTools(wx.Dialog):
             parts = self.store.read_all()
         elif self.group_strategy == 1:
             parts = self.store.read_parts_by_group_value_footprint()
+            self.logger.debug(parts)
         return parts
 
     def auto_match_parts(self, e):
@@ -730,52 +728,51 @@ class JLCPCBTools(wx.Dialog):
         if not self.store:
             self.init_store()
         self.footprint_list.DeleteAllItems()
-        icons = {
-            0: wx.dataview.DataViewIconText(
-                "",
-                loadIconScaled(
-                    "nextpcb-checkced.png",
-                    self.scale_factor,
-                ),
-            ),
-            1: wx.dataview.DataViewIconText(
-                "",
-                loadIconScaled(
-                    "nextpcb-uncheck.png",
-                    self.scale_factor,
-                ),
-            ),
-            2: wx.dataview.DataViewIconText(
-                "",
-                loadIconScaled(
-                    "nextpcb-disablecheck.png",
-                    self.scale_factor,
-                ),
-            ),
+        # icons = {
+            # 0: wx.dataview.DataViewIconText(
+                # "",
+                # loadIconScaled(
+                    # "nextpcb-checkced.png",
+                    # self.scale_factor,
+                # ),
+            # ),
+            # 1: wx.dataview.DataViewIconText(
+                # "",
+                # loadIconScaled(
+                    # "nextpcb-uncheck.png",
+                    # self.scale_factor,
+                # ),
+            # ),
+            # 2: wx.dataview.DataViewIconText(
+                # "",
+                # loadIconScaled(
+                    # "nextpcb-disablecheck.png",
+                    # self.scale_factor,
+                # ),
+            # ),
+        # }
+        toogles_dict = {
+            0: False,
+            1: True,
+            '0': False,
+            '1': True,
         }
         numbers = []
         parts = []
         display_parts = self.get_display_parts()
-        self.logger.debug(display_parts)
         for part in display_parts:
             fp = get_footprint_by_ref(GetBoard(), (part[0].split(","))[0])[0]
             if part[3] and part[3] not in numbers:
                 numbers.append(part[3])
             if ',' in part[0]:
-                part.insert(6, 2)
-                part.insert(7, 2)
-                part.insert(8, '')
-                part.insert(9, '')
-            
-            # don't show the part if hide BOM is set
-            #if self.hide_bom_parts and part[6]:
-                #continue
-            # don't show the part if hide POS is set
-            #if self.hide_pos_parts and part[7]:
-                #continue
-            # decide which icon to use
-            part[6] = icons.get(part[6], icons.get(0))
-            part[7] = icons.get(part[7], icons.get(0))
+                part[4] = (part[4].split(","))[0]
+                part[5] = (part[5].split(","))[0]
+                part[6] = 1 if '1' in part[6].split(",") else 0
+                part[7] = 1 if '1' in part[7].split(",") else 0
+                part[8] = ''
+                part[9] = ''
+            part[6] = toogles_dict.get(part[6], toogles_dict.get(1))
+            part[7] = toogles_dict.get(part[7], toogles_dict.get(1))
             if ',' not in part[0]:
                 side = "top" if fp.GetLayer() == 0 else "bottom"
                 part[9] = side
@@ -929,27 +926,31 @@ class JLCPCBTools(wx.Dialog):
     def toggle_bom(self, e):
         """Toggle the exclude from BOM attribute of a footprint."""
         selected_rows = []
+        self.logger.debug("toggle bom")
         for item in self.footprint_list.GetSelections():
             row = self.footprint_list.ItemToRow(item)
             selected_rows.append(row)
-            ref = self.footprint_list.GetTextValue(row, 0)
-            fp = get_footprint_by_ref(GetBoard(), ref)[0]
-            bom = toggle_exclude_from_bom(fp)
-            self.store.set_bom(ref, bom)
+            refs = self.footprint_list.GetTextValue(row, 1).split(",")
+            for ref in refs:
+                #fp = get_footprint_by_ref(GetBoard(), ref)[0]
+                bom = self.footprint_list.GetValue(row, 7)
+                self.store.set_bom(ref, bom)
         self.populate_footprint_list()
         for row in selected_rows:
             self.footprint_list.SelectRow(row)
 
     def toggle_pos(self, e):
-        selected_rows = []
         """Toggle the exclude from POS attribute of a footprint."""
+        selected_rows = []
+        self.logger.debug("toggle pos")
         for item in self.footprint_list.GetSelections():
             row = self.footprint_list.ItemToRow(item)
             selected_rows.append(row)
-            ref = self.footprint_list.GetTextValue(row, 0)
-            fp = get_footprint_by_ref(GetBoard(), ref)[0]
-            pos = toggle_exclude_from_pos(fp)
-            self.store.set_pos(ref, pos)
+            refs = self.footprint_list.GetTextValue(row, 1).split(",")
+            for ref in refs:
+                #fp = get_footprint_by_ref(GetBoard(), ref)[0]
+                pos = self.footprint_list.GetValue(row, 8)
+                self.store.set_pos(ref, pos)
         self.populate_footprint_list()
         for row in selected_rows:
             self.footprint_list.SelectRow(row)
@@ -974,11 +975,11 @@ class JLCPCBTools(wx.Dialog):
             self.logger.warning("Select only one component, please.")
             return
         row = self.footprint_list.ItemToRow(item)
-        ref = self.footprint_list.GetValue(row, 0)
+        ref = self.footprint_list.GetValue(row, 1)
         part = self.store.get_part(ref)
         for r in range(self.footprint_list.GetItemCount()):
-            value = self.footprint_list.GetValue(r, 1)
-            fp = self.footprint_list.GetValue(r, 2)
+            value = self.footprint_list.GetValue(r, 2)
+            fp = self.footprint_list.GetValue(r, 3)
             if part[1] == value and part[2] == fp:
                 self.footprint_list.SelectRow(r)
 
@@ -1075,9 +1076,9 @@ class JLCPCBTools(wx.Dialog):
         selection = {}
         for item in self.footprint_list.GetSelections():
             row = self.footprint_list.ItemToRow(item)
-            reference = self.footprint_list.GetTextValue(row, 0)
-            value = self.footprint_list.GetTextValue(row, 1)
-            lcsc = self.footprint_list.GetTextValue(row, 3)
+            reference = (self.footprint_list.GetTextValue(row, 1).split(","))[0]
+            value = self.footprint_list.GetTextValue(row, 2)
+            lcsc = self.footprint_list.GetTextValue(row, 4)
             if lcsc != "":
                 selection[reference] = lcsc
             else:
@@ -1090,7 +1091,7 @@ class JLCPCBTools(wx.Dialog):
             row = self.footprint_list.ItemToRow(item)
             if row == -1:
                 return
-            part = self.footprint_list.GetTextValue(row, 3)
+            part = self.footprint_list.GetTextValue(row, 4)
             if part != "":
                 if wx.TheClipboard.Open():
                     wx.TheClipboard.SetData(wx.TextDataObject(part))
@@ -1107,7 +1108,7 @@ class JLCPCBTools(wx.Dialog):
                 return
             for item in self.footprint_list.GetSelections():
                 row = self.footprint_list.ItemToRow(item)
-                reference = self.footprint_list.GetTextValue(row, 0)
+                reference = self.footprint_list.GetTextValue(row, 1)
                 self.store.set_lcsc(reference, lcsc)
             self.populate_footprint_list()
 
@@ -1157,9 +1158,9 @@ class JLCPCBTools(wx.Dialog):
             row = self.footprint_list.ItemToRow(item)
             if row == -1:
                 return
-            footp = self.footprint_list.GetTextValue(row, 2)
-            partval = self.footprint_list.GetTextValue(row, 1)
-            lcscpart = self.footprint_list.GetTextValue(row, 3)
+            footp = self.footprint_list.GetTextValue(row, 3)
+            partval = self.footprint_list.GetTextValue(row, 2)
+            lcscpart = self.footprint_list.GetTextValue(row, 4)
             if footp != "" and partval != "" and lcscpart != "":
                 if self.library.get_mapping_data(footp, partval):
                     self.library.update_mapping_data(footp, partval, lcscpart)
@@ -1171,8 +1172,8 @@ class JLCPCBTools(wx.Dialog):
             row = self.footprint_list.ItemToRow(item)
             if row == -1:
                 return
-            footp = self.footprint_list.GetTextValue(row, 2)
-            partval = self.footprint_list.GetTextValue(row, 1)
+            footp = self.footprint_list.GetTextValue(row, 3)
+            partval = self.footprint_list.GetTextValue(row, 2)
             if footp != "" and partval != "":
                 if self.library.get_mapping_data(footp, partval):
                     lcsc = self.library.get_mapping_data(footp, partval)[2]
@@ -1222,7 +1223,20 @@ class JLCPCBTools(wx.Dialog):
         conMenu.Destroy()  # destroy to avoid memory leak
 
     def toggle_update_to_db(self, e):
-        pass
+        item = e.GetItem()
+        col = e.GetColumn()
+
+
+        if col == 7:
+
+            self.logger.debug("777777777777777")
+            self.toggle_bom(e)
+        elif col == 8:
+            self.logger.debug("88888888")
+            self.toggle_pos(e)
+        else:
+            pass
+
         
         # row = self.footprint_list.ItemToRow(self.footprint_list.GetSelections())
         # col = e.GetColumn()?
