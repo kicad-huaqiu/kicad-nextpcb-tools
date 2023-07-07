@@ -7,9 +7,10 @@ import sys
 import wx
 import wx.adv as adv
 import wx.dataview
-from pcbnew import GetBoard, GetBuildVersion
+import pcbnew
+from pcbnew import GetBuildVersion
 
-from .events import (
+from events import (
     EVT_ASSIGN_PARTS_EVENT,
     EVT_MESSAGE_EVENT,
     EVT_POPULATE_FOOTPRINT_LIST_EVENT,
@@ -17,8 +18,8 @@ from .events import (
     EVT_UPDATE_GAUGE_EVENT,
     EVT_UPDATE_SETTING,
 )
-from .fabrication import Fabrication
-from .helpers import (
+from fabrication import Fabrication
+from helpers import (
     PLUGIN_PATH,
     GetScaleFactor,
     HighResWxSize,
@@ -29,14 +30,14 @@ from .helpers import (
     toggle_exclude_from_bom,
     toggle_exclude_from_pos,
 )
-from .library import Library, LibraryState
-from .partdetails import PartDetailsDialog
-from .partmapper import PartMapperManagerDialog
-from .partselector import PartSelectorDialog
-from .rotations import RotationManagerDialog
-from .schematicexport import SchematicExport
-from .settings import SettingsDialog
-from .store import Store
+from library import Library, LibraryState
+from partdetails import PartDetailsDialog
+from partmapper import PartMapperManagerDialog
+from partselector import PartSelectorDialog
+from rotations import RotationManagerDialog
+from schematicexport import SchematicExport
+from settings import SettingsDialog
+from store import Store
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -62,7 +63,7 @@ ID_CONTEXT_MENU_ADD_ROT_BY_PACKAGE = wx.NewIdRef()
 ID_CONTEXT_MENU_ADD_ROT_BY_NAME = wx.NewIdRef()
 
 
-class JLCPCBTools(wx.Dialog):
+class NextPCBTools(wx.Dialog):
     def __init__(self, parent):
         if sys.platform != "darwin":
             self.app = wx.App()
@@ -79,8 +80,11 @@ class JLCPCBTools(wx.Dialog):
         self.window = wx.GetTopLevelParent(self)
         self.SetSize(HighResWxSize(self.window, wx.Size(1400, 800)))
         self.scale_factor = GetScaleFactor(self.window)
-        self.project_path = os.path.split(GetBoard().GetFileName())[0]
-        self.board_name = os.path.split(GetBoard().GetFileName())[1]
+        board: pcbnew.BOARD = pcbnew.GetBoard()
+        filename = board.GetFileName
+        #filename = board.GetFileName()
+        self.project_path = os.path.split(filename)[0]
+        self.board_name = os.path.split(filename)[1]
         self.schematic_name = f"{self.board_name.split('.')[0]}.kicad_sch"
         self.hide_bom_parts = False
         self.hide_pos_parts = False
@@ -149,20 +153,6 @@ class JLCPCBTools(wx.Dialog):
             loadBitmapScaled("nextpcb-automatch.png", self.scale_factor),
             "Auto Match MPN number to parts",
         )
-        # self.auto_match_button = wx.Button(
-            # self.upper_toolbar,
-            # ID_AUTO_MATCH,
-            # "Auto Match",
-            # wx.DefaultPosition,
-            # wx.DefaultSize,
-            # 0
-        # )
-        # self.upper_toolbar.SetToolLongHelp(
-            # ID_AUTO_MATCH,
-            # "Auto Match MPN number to parts"
-        # )
-        #self.generate_button.SetDefault()
-        #self.upper_toolbar.AddControl(self.auto_match_button)
 
         self.upper_toolbar.AddStretchableSpace()
 
@@ -180,32 +170,6 @@ class JLCPCBTools(wx.Dialog):
             "Generate files and Place Order"
         )
 
-        # self.generate_button = self.upper_toolbar.AddTool(
-            # ID_GENERATE,
-            # "Generate",
-            #  wx.NullBitmap,
-            # bmpDisabled = wx.NullBitmap,
-            # kind = wx.ITEM_NORMAL,
-            # shortHelp = "Generate files"
-        # )
-
-        # self.generate_and_place_order_label = wx.StaticText(
-            # self.upper_toolbar, 
-            # wx.ID_ANY, 
-            # label=
-            # )
-        # 
-        # self.generate_and_place_order_label.Wrap(-1)
-        # 
-        # self.generate_and_place_order_label.SetForegroundColour(wx.GREEN)
-
-        # self.generate_place_order_button = self.upper_toolbar.AddTool(
-            # ID_GENERATE_AND_PLACE_ORDER,
-            # "Generate and Place Order",
-            # loadBitmapScaled("", self.scale_factor),
-            # "Generate files and Place Order",
-        # )
-
         self.generate_place_order_button = wx.Button(
             self.upper_toolbar,
             ID_GENERATE_AND_PLACE_ORDER,
@@ -220,25 +184,7 @@ class JLCPCBTools(wx.Dialog):
             "Generate files and Place Order"
         )
 
-        #self.generate_place_order_button.SetForegroundColour(wx.GREEN)
-
         self.upper_toolbar.AddSeparator()
-
-        # self.rotation_button = wx.BitmapButton(
-            # self.upper_toolbar,
-            # ID_ROTATIONS,
-            # loadBitmapScaled("nextpcb-rotations.png", self.scale_factor),
-            # wx.DefaultPosition,
-            # wx.DefaultSize,
-            # 0,
-            # name="Auto Match",
-        # )
-        # self.upper_toolbar.SetToolLongHelp(
-            # ID_AUTO_MATCH,
-            # "Auto Match MPN number to parts"
-        # )
-        # self.generate_button.SetDefault()
-        # self.upper_toolbar.AddControl(self.auto_match_button)
 
         self.rotation_button = self.upper_toolbar.AddTool(
             ID_ROTATIONS,
@@ -275,7 +221,7 @@ class JLCPCBTools(wx.Dialog):
         self.Bind(wx.EVT_TOOL, self.manage_settings, self.settings_button)
 
         # ---------------------------------------------------------------------
-        # ------------------ Right side toolbar List --------------------------
+        # ------------------ down toolbar List --------------------------
         # ---------------------------------------------------------------------
 
         self.down_toolbar = wx.ToolBar(
@@ -301,12 +247,6 @@ class JLCPCBTools(wx.Dialog):
         self.down_toolbar.AddControl(self.select_part_button)
 
         self.down_toolbar.AddSeparator()
-        # self.select_part_button = self.right_toolbar.AddTool(
-            # ID_MANUAL_MATCH,
-            # "Manual Match",
-            # wx.Bitmap(),
-            # "Assign MPN number to a part by manual",
-        # )
         
         self.remove_part_button = wx.Button(
             self.down_toolbar,
@@ -316,98 +256,41 @@ class JLCPCBTools(wx.Dialog):
         self.remove_part_button.SetDefault()
         self.down_toolbar.AddControl(self.remove_part_button)
         self.down_toolbar.AddSeparator()
-        # self.remove_part_button = self.right_toolbar.AddTool(
-            # ID_REMOVE_PART,
-            # "Remove Assigned Parts",
-            # loadBitmapScaled(
-                # "",
-                # self.scale_factor,
-            # ),
-            # "Remove assigned MPN number",
-        # )
 
-        # self.select_alike_button = self.down_toolbar.AddTool(
+        # self.select_alike_button = wx.Button(
+            # self.down_toolbar,
             # ID_SELECT_SAME_PARTS,
-            # "Select Same Part",
-            # loadBitmapScaled(
-                # "",
-                # self.scale_factor,
-            # ),
-            # "Select footprint that are alike",
+            # " Select Same Part "
         # )
+        # self.select_alike_button.SetDefault()
+        # self.down_toolbar.AddControl(self.select_alike_button)
+        # self.down_toolbar.AddSeparator()
 
-        self.select_alike_button = wx.Button(
-            self.down_toolbar,
-            ID_SELECT_SAME_PARTS,
-            " Select Same Part "
-        )
-        self.select_alike_button.SetDefault()
-        self.down_toolbar.AddControl(self.select_alike_button)
-        self.down_toolbar.AddSeparator()
-        # self.part_details_button = self.down_toolbar.AddTool(
+        # self.part_details_button = wx.Button(
+            # self.down_toolbar,
             # ID_PART_DETAILS,
-            # "Part Details",
-            # loadBitmapScaled(
-                # "",
-                # self.scale_factor,
-            # ),
-            # "Show details of an assigned part",
+            # " Part Details "
         # )
-
-        self.part_details_button = wx.Button(
-            self.down_toolbar,
-            ID_PART_DETAILS,
-            " Part Details "
-        )
-        self.part_details_button.SetDefault()
-        self.down_toolbar.AddControl(self.part_details_button)
-        self.down_toolbar.AddSeparator()
-        # self.toggle_bom_button = self.down_toolbar.AddTool(
+        # self.part_details_button.SetDefault()
+        # self.down_toolbar.AddControl(self.part_details_button)
+        # self.down_toolbar.AddSeparator()
+        # self.toggle_bom_button = wx.Button(
+            # self.down_toolbar,
             # ID_TOGGLE_BOM,
-            # "Toggle BOM",
-            # loadBitmapScaled(
-                # "",
-                # self.scale_factor,
-            # ),
-            # "Toggle exclude from BOM attribute",
+            # " Toggle BOM "
         # )
-        #self.down_toolbar.AddStretchableSpace()
-        self.toggle_bom_button = wx.Button(
-            self.down_toolbar,
-            ID_TOGGLE_BOM,
-            " Toggle BOM "
-        )
-        self.toggle_bom_button.SetDefault()
-        self.down_toolbar.AddControl(self.toggle_bom_button)
-        self.down_toolbar.AddSeparator()
-        # self.toggle_pos_button = self.down_toolbar.AddTool(
+        # self.toggle_bom_button.SetDefault()
+        # self.down_toolbar.AddControl(self.toggle_bom_button)
+        # self.down_toolbar.AddSeparator()
+
+        # self.toggle_pos_button = wx.Button(
+            # self.down_toolbar,
             # ID_TOGGLE_POS,
-            # "Toggle POS",
-            # loadBitmapScaled(
-                # "",
-                # self.scale_factor,
-            # ),
-            # "Toggle exclude from POS attribute",
+            # " Toggle POS "
         # )
-
-        self.toggle_pos_button = wx.Button(
-            self.down_toolbar,
-            ID_TOGGLE_POS,
-            " Toggle POS "
-        )
-        self.toggle_pos_button.SetDefault()
-        self.down_toolbar.AddControl(self.toggle_pos_button)
-        self.down_toolbar.AddSeparator()
-
-        # self.save_all_button = self.down_toolbar.AddTool(
-            # ID_SAVE_MAPPINGS,
-            # "Save mappings",
-            # loadBitmapScaled(
-                # "",
-                # self.scale_factor,
-            # ),
-            # "Save all mappings",
-        # )
+        # self.toggle_pos_button.SetDefault()
+        # self.down_toolbar.AddControl(self.toggle_pos_button)
+        # self.down_toolbar.AddSeparator()
 
         self.save_all_button = wx.Button(
             self.down_toolbar,
@@ -418,27 +301,19 @@ class JLCPCBTools(wx.Dialog):
         self.down_toolbar.AddControl(self.save_all_button)
         self.down_toolbar.SetFocus()
         self.down_toolbar.AddStretchableSpace()
-        # self.export_schematic_button = self.right_toolbar.AddTool(
-            # ID_EXPORT_TO_SCHEMATIC,
-            # "Export to schematic",
-            # loadBitmapScaled(
-                # "mdi-application-export.png",
-                # self.scale_factor,
-            # ),
-            # "Export mappings to schematic",
-        # )
+        
         self.down_toolbar.Realize()
 
-        self.Bind(wx.EVT_TOOL, self.select_part, self.select_part_button)
-        self.Bind(wx.EVT_TOOL, self.remove_part, self.remove_part_button)
-        self.Bind(wx.EVT_TOOL, self.select_alike, self.select_alike_button)
+        self.Bind(wx.EVT_BUTTON, self.select_part, self.select_part_button)
+        self.Bind(wx.EVT_BUTTON, self.remove_part, self.remove_part_button)
+        #self.Bind(wx.EVT_BUTTON, self.select_alike, self.select_alike_button)
         #self.Bind(wx.EVT_TOOL, self.toggle_bom_pos, self.toggle_bom_pos_button)
         #self.Bind(wx.EVT_TOOL, self.toggle_bom, self.toggle_bom_button)
         #self.Bind(wx.EVT_TOOL, self.toggle_pos, self.toggle_pos_button)
-        self.Bind(wx.EVT_TOOL, self.get_part_details, self.part_details_button)
+        #self.Bind(wx.EVT_BUTTON, self.get_part_details, self.part_details_button)
         #self.Bind(wx.EVT_TOOL, self.OnBomHide, self.hide_bom_button)
         #self.Bind(wx.EVT_TOOL, self.OnPosHide, self.hide_pos_button)
-        self.Bind(wx.EVT_TOOL, self.save_all_mappings, self.save_all_button)
+        self.Bind(wx.EVT_BUTTON, self.save_all_mappings, self.save_all_button)
         #self.Bind(wx.EVT_TOOL, self.export_to_schematic, self.export_schematic_button)
 
 
@@ -457,9 +332,9 @@ class JLCPCBTools(wx.Dialog):
         self.first_panel.Layout()
         grid_sizer1.Fit(self.first_panel)
         self.notebook.AddPage(self.first_panel, "All", True)
+        
         self.second_panel = wx.Panel(self.notebook, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.TAB_TRAVERSAL)
         grid_sizer2 = wx.GridSizer(0, 1, 0, 0)
-        
         
         self.second_panel.SetSizer(grid_sizer2)
         self.second_panel.Layout()
@@ -468,6 +343,7 @@ class JLCPCBTools(wx.Dialog):
         
         table_sizer.Add(self.notebook, 20, wx.EXPAND |wx.ALL, 5)
 
+        #class main
         self.footprint_list = wx.dataview.DataViewListCtrl(
             self.first_panel,
             wx.ID_ANY,
@@ -576,7 +452,7 @@ class JLCPCBTools(wx.Dialog):
             wx.dataview.EVT_DATAVIEW_ITEM_CONTEXT_MENU, self.OnRightDown
         )
 
-        
+        self.footprint_list.Bind(wx.dataview.EVT_DATAVIEW_ITEM_ACTIVATED, self.get_part_details)
         self.footprint_list.Bind(wx.dataview.EVT_DATAVIEW_ITEM_VALUE_CHANGED, self.toggle_update_to_db)
 
         table_sizer.Add(self.down_toolbar, 1, wx.ALL | wx.EXPAND, 5)
@@ -629,7 +505,7 @@ class JLCPCBTools(wx.Dialog):
         self.Bind(EVT_POPULATE_FOOTPRINT_LIST_EVENT, self.populate_footprint_list)
         self.Bind(EVT_UPDATE_SETTING, self.update_settings)
 
-        self.enable_toolbar_buttons(True)
+        self.enable_toolbar_buttons(False)
 
         self.init_logger()
         self.init_library()
@@ -690,28 +566,29 @@ class JLCPCBTools(wx.Dialog):
         pass
 
     def generate_fabrication_data(self, e):
-        pass
         """Generate fabrication data."""
-        # self.fabrication.fill_zones()
+        self.fabrication.fill_zones()
         # layer_selection = self.layer_selection.GetSelection()
         # if layer_selection != 0:
             # layer_count = int(self.layer_selection.GetString(layer_selection)[:1])
         # else:
             # layer_count = None
-        # self.fabrication.generate_geber(layer_count)
-        # self.fabrication.generate_excellon()
-        # self.fabrication.zip_gerber_excellon()
-        # self.fabrication.generate_cpl()
-        # self.fabrication.generate_bom()
+        self.fabrication.generate_geber(None)
+        self.fabrication.generate_excellon()
+        self.fabrication.zip_gerber_excellon()
+        self.fabrication.generate_cpl()
+        self.fabrication.generate_bom()
 
     def generate_data_place_order(self, e):
-        pass
+        self.generate_fabrication_data(self, e)
+        
 
     def assign_parts(self, e):
         """Assign a selected LCSC number to parts"""
         for reference in e.references:
-            self.store.set_lcsc(reference, e.lcsc)
-            self.store.set_stock(reference, e.stock)
+            self.store.set_lcsc(reference, e.mpn)
+            self.store.set_manufacturer(reference, e.manufacturer)
+            self.store.set_description(reference, e.description)
         self.populate_footprint_list()
 
     def display_message(self, e):
@@ -761,14 +638,14 @@ class JLCPCBTools(wx.Dialog):
         parts = []
         display_parts = self.get_display_parts()
         for part in display_parts:
-            fp = get_footprint_by_ref(GetBoard(), (part[0].split(","))[0])[0]
+            fp = get_footprint_by_ref(pcbnew.GetBoard(), (part[0].split(","))[0])[0]
             if part[3] and part[3] not in numbers:
                 numbers.append(part[3])
             if ',' in part[0]:
                 part[4] = (part[4].split(","))[0]
                 part[5] = (part[5].split(","))[0]
-                part[6] = 1 if '1' in part[6].split(",") else 0
-                part[7] = 1 if '1' in part[7].split(",") else 0
+                part[6] = 0 if '0' in part[6].split(",") else 1
+                part[7] = 0 if '0' in part[7].split(",") else 1
                 part[8] = ''
                 part[9] = ''
             part[6] = toogles_dict.get(part[6], toogles_dict.get(1))
@@ -959,9 +836,13 @@ class JLCPCBTools(wx.Dialog):
         """Remove an assigned a LCSC Part number to a footprint."""
         for item in self.footprint_list.GetSelections():
             row = self.footprint_list.ItemToRow(item)
-            ref = self.footprint_list.GetTextValue(row, 0)
-            get_footprint_by_ref(GetBoard(), ref)[0]
-            self.store.set_lcsc(ref, "")
+            ref = self.footprint_list.GetTextValue(row, 1)
+            for iter_ref in ref.split(","):
+                if iter_ref:
+                    #get_footprint_by_ref(GetBoard(), iter_ref)[0]
+                    self.store.set_lcsc(iter_ref, "")
+                    self.store.set_manufacturer(iter_ref, "")
+                    self.store.set_description(iter_ref, "")    
         self.populate_footprint_list()
 
     def select_alike(self, e):
@@ -984,13 +865,14 @@ class JLCPCBTools(wx.Dialog):
                 self.footprint_list.SelectRow(r)
 
     def get_part_details(self, e):
-        """Fetch part details from LCSC and show them one after another each in a modal."""
-        parts = self.get_selected_part_id_from_gui()
-        if not parts:
+        """Fetch part details from NextPCB and show them one after another each in a modal."""
+        item = self.footprint_list.GetSelections()
+        row = self.footprint_list.ItemToRow(item)
+        mpn = self.footprint_list.GetTextValue(row, 4)
+        if not mpn:
             return
-
-        for part in parts:
-            self.show_part_details_dialog(part)
+        else:
+            self.show_part_details_dialog(mpn)
 
     def get_column_by_name(self, column_title_to_find):
         """Lookup a column in our main footprint table by matching its title"""
@@ -1014,7 +896,7 @@ class JLCPCBTools(wx.Dialog):
             if row == -1:
                 continue
 
-            lcsc_id = self.get_row_item_in_column(row, "LCSC")
+            lcsc_id = self.get_row_item_in_column(row, "MPN")
             lcsc_ids_selected.append(lcsc_id)
 
         return lcsc_ids_selected
@@ -1076,13 +958,14 @@ class JLCPCBTools(wx.Dialog):
         selection = {}
         for item in self.footprint_list.GetSelections():
             row = self.footprint_list.ItemToRow(item)
-            reference = (self.footprint_list.GetTextValue(row, 1).split(","))[0]
-            value = self.footprint_list.GetTextValue(row, 2)
-            lcsc = self.footprint_list.GetTextValue(row, 4)
-            if lcsc != "":
-                selection[reference] = lcsc
-            else:
-                selection[reference] = value
+            reference = (self.footprint_list.GetValue(row, 1).split(","))[0]
+            self.logger.debug(f"reference, {reference}")
+            value = self.footprint_list.GetValue(row, 2)
+            fp = self.footprint_list.GetValue(row, 3)
+            MPN = self.footprint_list.GetValue(row, 4)
+            Manufacturer = self.footprint_list.GetValue(row, 5)
+            selection[reference] = MPN + "," + Manufacturer + "," + value + "," + fp
+        self.logger.debug(f"Create SQLite table for rotations, {selection}")
         PartSelectorDialog(self, selection).ShowModal()
 
     def copy_part_lcsc(self, e):
@@ -1223,31 +1106,14 @@ class JLCPCBTools(wx.Dialog):
         conMenu.Destroy()  # destroy to avoid memory leak
 
     def toggle_update_to_db(self, e):
-        item = e.GetItem()
         col = e.GetColumn()
 
-
         if col == 7:
-
-            self.logger.debug("777777777777777")
             self.toggle_bom(e)
         elif col == 8:
-            self.logger.debug("88888888")
             self.toggle_pos(e)
         else:
             pass
-
-        
-        # row = self.footprint_list.ItemToRow(self.footprint_list.GetSelections())
-        # col = e.GetColumn()?
-        # new_value = self.footprint_list.GetTextValue(row, col)
-        # if new_value != 2:
-            # reference = self.footprint_list.GetTextValue(row, 0)
-        # 
-            # if col == 6:  # BomCheck列
-                # self.update_check_value(reference, "bomcheck", new_value)
-            # elif col == 7:  # PosCheck列
-                # self.update_check_value(reference, "poscheck", new_value)
 
     def init_logger(self):
         """Initialize logger to log into textbox"""
@@ -1286,3 +1152,10 @@ class LogBoxHandler(logging.StreamHandler):
             self.flush()
         except:
             pass
+
+
+app = wx.App(0)
+
+frame = NextPCBTools(None)
+app.SetTopWindow(frame)
+frame.Show()

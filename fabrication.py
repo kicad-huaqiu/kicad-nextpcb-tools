@@ -31,7 +31,7 @@ from pcbnew import (
     ToMM,
 )
 
-from .helpers import get_exclude_from_pos, get_footprint_by_ref, get_smd, is_nightly
+from helpers import get_exclude_from_pos, get_footprint_by_ref, get_smd, is_nightly
 
 
 class Fabrication:
@@ -45,9 +45,9 @@ class Fabrication:
 
     def create_folders(self):
         """Create output folders if they not already exist."""
-        self.outputdir = os.path.join(self.path, "jlcpcb", "production_files")
+        self.outputdir = os.path.join(self.path, "nextpcb", "production_files")
         Path(self.outputdir).mkdir(parents=True, exist_ok=True)
-        self.gerberdir = os.path.join(self.path, "jlcpcb", "gerber")
+        self.gerberdir = os.path.join(self.path, "nextpcb", "gerber")
         Path(self.gerberdir).mkdir(parents=True, exist_ok=True)
 
     def fill_zones(self):
@@ -296,7 +296,7 @@ class Fabrication:
             os.path.join(self.outputdir, bomname), "w", newline="", encoding="utf-8"
         ) as csvfile:
             writer = csv.writer(csvfile, delimiter=",")
-            writer.writerow(["Comment", "Designator", "Footprint", "LCSC"])
+            writer.writerow(["Value", "Designator", "Footprint", "MPN"])
             for part in self.parent.store.read_bom_parts():
                 writer.writerow(part)
         self.logger.info("Finished generating BOM file")

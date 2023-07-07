@@ -1,7 +1,7 @@
 # import logging
 # import os
 
-from .plugin import JLCPCBPlugin
+from plugin import JLCPCBPlugin
 
 # logging.basicConfig(
 #     level=logging.DEBUG,

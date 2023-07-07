@@ -2,7 +2,7 @@ import os
 
 from pcbnew import ActionPlugin
 
-from .mainwindow import JLCPCBTools
+from mainwindow import NextPCBTools
 
 
 class JLCPCBPlugin(ActionPlugin):
@@ -18,6 +18,13 @@ class JLCPCBPlugin(ActionPlugin):
         self._pcbnew_frame = None
 
     def Run(self):
-        dialog = JLCPCBTools(None)
+        dialog = NextPCBTools(None)
         dialog.Center()
         dialog.Show()
+
+def main():
+    JLCPCBPlugin().Run()
+    # Plugin().register()
+
+if __name__ == '__main__':
+    main()

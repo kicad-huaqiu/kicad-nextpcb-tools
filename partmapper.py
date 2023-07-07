@@ -4,7 +4,7 @@ import os
 
 import wx
 
-from .helpers import HighResWxSize, loadBitmapScaled
+from helpers import HighResWxSize, loadBitmapScaled
 
 
 class PartMapperManagerDialog(wx.Dialog):

@@ -5,7 +5,7 @@ import webbrowser
 import requests
 import wx
 
-from .helpers import HighResWxSize, loadBitmapScaled
+from helpers import HighResWxSize, loadBitmapScaled
 
 
 class PartDetailsDialog(wx.Dialog):
@@ -14,7 +14,7 @@ class PartDetailsDialog(wx.Dialog):
             self,
             parent,
             id=wx.ID_ANY,
-            title="JLCPCB Part Details",
+            title="NextPCB Part Details",
             pos=wx.DefaultPosition,
             size=HighResWxSize(parent.window, wx.Size(1000, 800)),
             style=wx.DEFAULT_DIALOG_STYLE | wx.STAY_ON_TOP,
@@ -73,24 +73,24 @@ class PartDetailsDialog(wx.Dialog):
             HighResWxSize(parent.window, wx.Size(200, 200)),
             0,
         )
-        self.openpdf_button = wx.Button(
-            self,
-            wx.ID_ANY,
-            "Open Datasheet",
-            wx.DefaultPosition,
-            wx.DefaultSize,
-            0,
-        )
+        # self.openpdf_button = wx.Button(
+            # self,
+            # wx.ID_ANY,
+            # "Open Datasheet",
+            # wx.DefaultPosition,
+            # wx.DefaultSize,
+            # 0,
+        # )
 
-        self.openpdf_button.Bind(wx.EVT_BUTTON, self.openpdf)
+        # self.openpdf_button.Bind(wx.EVT_BUTTON, self.openpdf)
 
-        self.openpdf_button.SetBitmap(
-            loadBitmapScaled(
-                "mdi-file-document-outline.png",
-                self.parent.scale_factor,
-            )
-        )
-        self.openpdf_button.SetBitmapMargins((2, 0))
+        # self.openpdf_button.SetBitmap(
+            # loadBitmapScaled(
+                # "mdi-file-document-outline.png",
+                # self.parent.scale_factor,
+            # )
+        # )
+        # self.openpdf_button.SetBitmapMargins((2, 0))
 
         # ---------------------------------------------------------------------
         # ------------------------ Layout and Sizers --------------------------
@@ -98,8 +98,8 @@ class PartDetailsDialog(wx.Dialog):
 
         right_side_layout = wx.BoxSizer(wx.VERTICAL)
         right_side_layout.Add(self.image, 10, wx.ALL | wx.EXPAND, 5)
-        right_side_layout.AddStretchSpacer(50)
-        right_side_layout.Add(self.openpdf_button, 5, wx.LEFT | wx.RIGHT | wx.EXPAND, 5)
+        right_side_layout.AddStretchSpacer()
+        #right_side_layout.Add(self.openpdf_button, 5, wx.LEFT | wx.RIGHT | wx.EXPAND, 5)
         layout = wx.BoxSizer(wx.HORIZONTAL)
         layout.Add(self.data_list, 30, wx.ALL | wx.EXPAND, 5)
         layout.Add(right_side_layout, 10, wx.ALL | wx.EXPAND, 5)
@@ -129,7 +129,7 @@ class PartDetailsDialog(wx.Dialog):
         return result
 
     def get_part_data(self):
-        """fetch part data from JLCPCB API and parse it into the table, set picture and PDF link"""
+        """fetch part data from NextPCB API and parse it into the table, set picture and PDF link"""
         headers = {
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.93 Safari/537.36",
         }
@@ -161,11 +161,6 @@ class PartDetailsDialog(wx.Dialog):
             "leastNumber": "Minimal Quantity",
             "leastNumberPrice": "Minimum price",
         }
-        parttype = data.get("data", {}).get("componentLibraryType")
-        if parttype and parttype == "base":
-            self.data_list.AppendItem(["Type", "Basic"])
-        elif parttype and parttype == "expand":
-            self.data_list.AppendItem(["Type", "Extended"])
         for k, v in parameters.items():
             val = data.get("data", {}).get(k)
             if val:
@@ -178,14 +173,14 @@ class PartDetailsDialog(wx.Dialog):
                 if end == -1:
                     self.data_list.AppendItem(
                         [
-                            f"JLC Price for >{start}",
+                            f"NextPCB Price for >{start}",
                             str(price.get("productPrice")),
                         ]
                     )
                 else:
                     self.data_list.AppendItem(
                         [
-                            f"JLC Price for {start}-{end}",
+                            f"NextPCB Price for {start}-{end}",
                             str(price.get("productPrice")),
                         ]
                     )
@@ -197,14 +192,14 @@ class PartDetailsDialog(wx.Dialog):
                 if end == -1:
                     self.data_list.AppendItem(
                         [
-                            f"LCSC Price for >{start}",
+                            f"NextPCB Price for >{start}",
                             str(price.get("productPrice")),
                         ]
                     )
                 else:
                     self.data_list.AppendItem(
                         [
-                            f"LCSC Price for {start}-{end}",
+                            f"NextPCB Price for {start}-{end}",
                             str(price.get("productPrice")),
                         ]
                     )
@@ -227,11 +222,17 @@ class PartDetailsDialog(wx.Dialog):
                 )
             )
         self.pdfurl = data.get("data", {}).get("dataManualUrl")
+        self.data_list.AppendItem(
+            [
+                "Datasheet",
+                str(attribute.get("attribute_value_name")),
+            ]
+        )
 
     def report_part_data_fetch_error(self, reason):
         wx.MessageBox(
-            f"Failed to download part detail from the JLCPCB API ({reason})\r\n"
-            f"We looked for a part named:\r\n{self.part}\r\n[hint: did you fill in the LCSC field correctly?]",
+            f"Failed to download part detail from the NextPCB API ({reason})\r\n"
+            f"We looked for a part named:\r\n{self.part}\r\n[hint: did you fill in the NextPCB field correctly?]",
             "Error",
             style=wx.ICON_ERROR,
         )

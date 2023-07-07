@@ -7,7 +7,7 @@ from pcbnew import (
     GetBuildVersion,
 )
 
-from .helpers import is_nightly
+from helpers import is_nightly
 
 
 class SchematicExport:
