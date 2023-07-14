@@ -7,19 +7,19 @@ import time
 from enum import Enum
 from pathlib import Path
 from threading import Thread
-from unzip_parts import unzip_parts
+from .unzip_parts import unzip_parts
 from glob import glob
 
 import requests
 import wx
 
-from events import (
+from .events import (
     MessageEvent,
     PopulateFootprintListEvent,
     ResetGaugeEvent,
     UpdateGaugeEvent,
 )
-from helpers import PLUGIN_PATH, natural_sort_collation
+from .helpers import PLUGIN_PATH, natural_sort_collation
 
 
 class LibraryState(Enum):

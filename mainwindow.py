@@ -7,10 +7,9 @@ import sys
 import wx
 import wx.adv as adv
 import wx.dataview
-import pcbnew
-from pcbnew import GetBuildVersion
+from pcbnew import GetBoard, GetBuildVersion
 
-from events import (
+from .events import (
     EVT_ASSIGN_PARTS_EVENT,
     EVT_MESSAGE_EVENT,
     EVT_POPULATE_FOOTPRINT_LIST_EVENT,
@@ -18,8 +17,8 @@ from events import (
     EVT_UPDATE_GAUGE_EVENT,
     EVT_UPDATE_SETTING,
 )
-from fabrication import Fabrication
-from helpers import (
+from .fabrication import Fabrication
+from .helpers import (
     PLUGIN_PATH,
     GetScaleFactor,
     HighResWxSize,
@@ -30,14 +29,14 @@ from helpers import (
     toggle_exclude_from_bom,
     toggle_exclude_from_pos,
 )
-from library import Library, LibraryState
-from partdetails import PartDetailsDialog
-from partmapper import PartMapperManagerDialog
-from partselector import PartSelectorDialog
-from rotations import RotationManagerDialog
-from schematicexport import SchematicExport
-from settings import SettingsDialog
-from store import Store
+from .library import Library, LibraryState
+from .partdetails import PartDetailsDialog
+from .partmapper import PartMapperManagerDialog
+from .partselector import PartSelectorDialog
+from .rotations import RotationManagerDialog
+from .schematicexport import SchematicExport
+from .settings import SettingsDialog
+from .store import Store
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -57,10 +56,11 @@ ID_PART_DETAILS = 10
 ID_TOGGLE_BOM = 11
 ID_TOGGLE_POS = 12
 ID_SAVE_MAPPINGS = 13
-
-#ID_EXPORT_TO_SCHEMATIC = 16
+ID_COPY_MPN = wx.NewIdRef()
+ID_PASTE_MPN = wx.NewIdRef()
 ID_CONTEXT_MENU_ADD_ROT_BY_PACKAGE = wx.NewIdRef()
 ID_CONTEXT_MENU_ADD_ROT_BY_NAME = wx.NewIdRef()
+#ID_EXPORT_TO_SCHEMATIC = 16
 
 
 class NextPCBTools(wx.Dialog):
@@ -80,11 +80,8 @@ class NextPCBTools(wx.Dialog):
         self.window = wx.GetTopLevelParent(self)
         self.SetSize(HighResWxSize(self.window, wx.Size(1400, 800)))
         self.scale_factor = GetScaleFactor(self.window)
-        board: pcbnew.BOARD = pcbnew.GetBoard()
-        filename = board.GetFileName
-        #filename = board.GetFileName()
-        self.project_path = os.path.split(filename)[0]
-        self.board_name = os.path.split(filename)[1]
+        self.project_path = os.path.split(GetBoard().GetFileName())[0]
+        self.board_name = os.path.split(GetBoard().GetFileName())[1]
         self.schematic_name = f"{self.board_name.split('.')[0]}.kicad_sch"
         self.hide_bom_parts = False
         self.hide_pos_parts = False
@@ -559,7 +556,7 @@ class NextPCBTools(wx.Dialog):
             parts = self.store.read_all()
         elif self.group_strategy == 1:
             parts = self.store.read_parts_by_group_value_footprint()
-            self.logger.debug(parts)
+            # self.logger.debug(parts)
         return parts
 
     def auto_match_parts(self, e):
@@ -586,9 +583,17 @@ class NextPCBTools(wx.Dialog):
     def assign_parts(self, e):
         """Assign a selected LCSC number to parts"""
         for reference in e.references:
+            wx.MessageBox(f"reference:{reference}", "Help", style=wx.ICON_INFORMATION)
+            wx.MessageBox(f"e.mpn:{e.mpn}", "Help", style=wx.ICON_INFORMATION)
             self.store.set_lcsc(reference, e.mpn)
+            wx.MessageBox(f"e.mpn:{e.mpn}", "Help", style=wx.ICON_INFORMATION)
             self.store.set_manufacturer(reference, e.manufacturer)
             self.store.set_description(reference, e.description)
+            wx.MessageBox(f"e.description:{e.description}", "Help", style=wx.ICON_INFORMATION)
+            self.store.set_stock_id(reference, e.stock_id)
+            
+            wx.MessageBox(f"get_part:{self.store.get_part(reference)}", "Help", style=wx.ICON_INFORMATION)
+        
         self.populate_footprint_list()
 
     def display_message(self, e):
@@ -638,7 +643,7 @@ class NextPCBTools(wx.Dialog):
         parts = []
         display_parts = self.get_display_parts()
         for part in display_parts:
-            fp = get_footprint_by_ref(pcbnew.GetBoard(), (part[0].split(","))[0])[0]
+            fp = get_footprint_by_ref(GetBoard(), (part[0].split(","))[0])[0]
             if part[3] and part[3] not in numbers:
                 numbers.append(part[3])
             if ',' in part[0]:
@@ -647,7 +652,7 @@ class NextPCBTools(wx.Dialog):
                 part[6] = 0 if '0' in part[6].split(",") else 1
                 part[7] = 0 if '0' in part[7].split(",") else 1
                 part[8] = ''
-                part[9] = ''
+                part[9] = "T/B" if ',' in part[9] else part[9]
             part[6] = toogles_dict.get(part[6], toogles_dict.get(1))
             part[7] = toogles_dict.get(part[7], toogles_dict.get(1))
             if ',' not in part[0]:
@@ -784,21 +789,21 @@ class NextPCBTools(wx.Dialog):
         ):
             self.down_toolbar.EnableTool(button, state)
 
-    def toggle_bom_pos(self, e):
-        """Toggle the exclude from BOM/POS attribute of a footprint."""
-        selected_rows = []
-        for item in self.footprint_list.GetSelections():
-            row = self.footprint_list.ItemToRow(item)
-            selected_rows.append(row)
-            ref = self.footprint_list.GetTextValue(row, 0)
-            fp = get_footprint_by_ref(GetBoard(), ref)[0]
-            bom = toggle_exclude_from_bom(fp)
-            pos = toggle_exclude_from_pos(fp)
-            self.store.set_bom(ref, bom)
-            self.store.set_pos(ref, pos)
-        self.populate_footprint_list()
-        for row in selected_rows:
-            self.footprint_list.SelectRow(row)
+    # def toggle_bom_pos(self, e):
+        # """Toggle the exclude from BOM/POS attribute of a footprint."""
+        # selected_rows = []
+        # for item in self.footprint_list.GetSelections():
+            # row = self.footprint_list.ItemToRow(item)
+            # selected_rows.append(row)
+            # ref = self.footprint_list.GetTextValue(row, 0)
+            # fp = get_footprint_by_ref(GetBoard(), ref)[0]
+            # bom = toggle_exclude_from_bom(fp)
+            # pos = toggle_exclude_from_pos(fp)
+            # self.store.set_bom(ref, bom)
+            # self.store.set_pos(ref, pos)
+        # self.populate_footprint_list()
+        # for row in selected_rows:
+            # self.footprint_list.SelectRow(row)
 
     def toggle_bom(self, e):
         """Toggle the exclude from BOM attribute of a footprint."""
@@ -866,13 +871,16 @@ class NextPCBTools(wx.Dialog):
 
     def get_part_details(self, e):
         """Fetch part details from NextPCB and show them one after another each in a modal."""
-        item = self.footprint_list.GetSelections()
-        row = self.footprint_list.ItemToRow(item)
-        mpn = self.footprint_list.GetTextValue(row, 4)
-        if not mpn:
-            return
-        else:
-            self.show_part_details_dialog(mpn)
+        for item in self.footprint_list.GetSelections():
+            row = self.footprint_list.ItemToRow(item)
+            mpn = self.footprint_list.GetTextValue(row, 4)
+            if not mpn:
+                return
+            else:
+                ref = self.footprint_list.GetTextValue(row, 1).split(",")
+                stock_id = self.store.get_stock_id(ref)
+                wx.MessageBox(f"stockID:{stock_id}", "Help", style=wx.ICON_INFORMATION)
+                self.show_part_details_dialog(stock_id)
 
     def get_column_by_name(self, column_title_to_find):
         """Lookup a column in our main footprint table by matching its title"""
@@ -906,12 +914,12 @@ class NextPCBTools(wx.Dialog):
             row, self.get_column_position_by_name(column_title)
         )
 
-    def show_part_details_dialog(self, part):
+    def show_part_details_dialog(self, stockID):
         wx.BeginBusyCursor()
         try:
             # self.logger.info(f"Opening PartDetailsDialog window for part with value: '{part} (this should be "
             #                 f"an LCSC identifier)'")
-            dialog = PartDetailsDialog(self, part)
+            dialog = PartDetailsDialog(self, stockID)
             dialog.ShowModal()
         finally:
             wx.EndBusyCursor()
@@ -959,13 +967,13 @@ class NextPCBTools(wx.Dialog):
         for item in self.footprint_list.GetSelections():
             row = self.footprint_list.ItemToRow(item)
             reference = (self.footprint_list.GetValue(row, 1).split(","))[0]
-            self.logger.debug(f"reference, {reference}")
+            #self.logger.debug(f"reference, {reference}")
             value = self.footprint_list.GetValue(row, 2)
             fp = self.footprint_list.GetValue(row, 3)
             MPN = self.footprint_list.GetValue(row, 4)
             Manufacturer = self.footprint_list.GetValue(row, 5)
             selection[reference] = MPN + "," + Manufacturer + "," + value + "," + fp
-        self.logger.debug(f"Create SQLite table for rotations, {selection}")
+        # self.logger.debug(f"Create SQLite table for rotations, {selection}")
         PartSelectorDialog(self, selection).ShowModal()
 
     def copy_part_lcsc(self, e):
@@ -1074,34 +1082,43 @@ class NextPCBTools(wx.Dialog):
     def OnRightDown(self, e):
         """Right click context menu for action on parts table."""
         conMenu = wx.Menu()
-        copy_lcsc = wx.MenuItem(conMenu, wx.NewIdRef(), "Copy LCSC")
+        copy_lcsc = wx.MenuItem(conMenu, ID_COPY_MPN, "Copy MPN")
         conMenu.Append(copy_lcsc)
         conMenu.Bind(wx.EVT_MENU, self.copy_part_lcsc, copy_lcsc)
 
-        paste_lcsc = wx.MenuItem(conMenu, wx.NewIdRef(), "Paste LCSC")
+        paste_lcsc = wx.MenuItem(conMenu, ID_PASTE_MPN, "Paste MPN")
         conMenu.Append(paste_lcsc)
         conMenu.Bind(wx.EVT_MENU, self.paste_part_lcsc, paste_lcsc)
 
-        rotation_by_package = wx.MenuItem(
-            conMenu, ID_CONTEXT_MENU_ADD_ROT_BY_PACKAGE, "Add Rotation by package"
+        manual_match = wx.MenuItem(
+            conMenu, ID_MANUAL_MATCH, "Manual Match"
         )
-        conMenu.Append(rotation_by_package)
-        conMenu.Bind(wx.EVT_MENU, self.add_part_rot, rotation_by_package)
+        conMenu.Append(manual_match)
+        conMenu.Bind(wx.EVT_MENU, self.select_part, manual_match)
 
-        rotation_by_name = wx.MenuItem(
-            conMenu, ID_CONTEXT_MENU_ADD_ROT_BY_NAME, "Add Rotation by name"
+        remove_mpn = wx.MenuItem(
+            conMenu, ID_REMOVE_PART, "Remove Assigned MPN"
         )
-        conMenu.Append(rotation_by_name)
-        conMenu.Bind(wx.EVT_MENU, self.add_part_rot, rotation_by_name)
+        conMenu.Append(remove_mpn)
+        conMenu.Bind(wx.EVT_MENU, self.remove_part, remove_mpn)
 
-        find_mapping = wx.MenuItem(conMenu, wx.NewIdRef(), "Find LCSC from Mappings")
-        conMenu.Append(find_mapping)
-        conMenu.Bind(wx.EVT_MENU, self.search_foot_mapping, find_mapping)
+        part_detail = wx.MenuItem(conMenu, ID_PART_DETAILS, "Show Part Details")
+        conMenu.Append(part_detail)
+        conMenu.Bind(wx.EVT_MENU, self.get_part_details, part_detail)
 
-        add_mapping = wx.MenuItem(conMenu, wx.NewIdRef(), "Add Footprint Mapping")
-        conMenu.Append(add_mapping)
-        conMenu.Bind(wx.EVT_MENU, self.add_foot_mapping, add_mapping)
-
+        item = self.footprint_list.GetSelection()
+        row = self.footprint_list.ItemToRow(item)
+        if row == -1:
+            return
+        mpn = self.footprint_list.GetTextValue(row, 4)
+        state = False if not mpn else True
+        
+        for menu_item in (
+            ID_COPY_MPN,
+            ID_REMOVE_PART,
+            ID_PART_DETAILS
+            ):
+            conMenu.Enable(menu_item, state)
         self.footprint_list.PopupMenu(conMenu)
         conMenu.Destroy()  # destroy to avoid memory leak
 
@@ -1154,8 +1171,8 @@ class LogBoxHandler(logging.StreamHandler):
             pass
 
 
-app = wx.App(0)
-
-frame = NextPCBTools(None)
-app.SetTopWindow(frame)
-frame.Show()
+# app = wx.App(0)
+# 
+# frame = NextPCBTools(None)
+# app.SetTopWindow(frame)
+# frame.Show()

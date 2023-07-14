@@ -2,8 +2,8 @@ import logging
 
 import wx
 
-from events import UpdateSetting
-from helpers import HighResWxSize, loadBitmapScaled
+from .events import UpdateSetting
+from .helpers import HighResWxSize, loadBitmapScaled
 
 
 class SettingsDialog(wx.Dialog):

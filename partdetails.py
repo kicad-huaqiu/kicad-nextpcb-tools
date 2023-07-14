@@ -1,15 +1,15 @@
 import io
 import logging
 import webbrowser
-
+import json
 import requests
 import wx
 
-from helpers import HighResWxSize, loadBitmapScaled
+from .helpers import HighResWxSize, loadBitmapScaled
 
 
 class PartDetailsDialog(wx.Dialog):
-    def __init__(self, parent, part):
+    def __init__(self, parent, stockID):
         wx.Dialog.__init__(
             self,
             parent,
@@ -22,9 +22,9 @@ class PartDetailsDialog(wx.Dialog):
 
         self.logger = logging.getLogger(__name__)
         self.parent = parent
-        self.part = part
+        self.stockID = stockID
         self.pdfurl = None
-        self.picture = None
+        #self.picture = None
 
         # ---------------------------------------------------------------------
         # ---------------------------- Hotkeys --------------------------------
@@ -131,86 +131,76 @@ class PartDetailsDialog(wx.Dialog):
     def get_part_data(self):
         """fetch part data from NextPCB API and parse it into the table, set picture and PDF link"""
         headers = {
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.93 Safari/537.36",
+            "Content-Type": "application/json",
         }
-        r = requests.get(
-            f"https://cart.jlcpcb.com/shoppingCart/smtGood/getComponentDetail?componentCode={self.part}",
+        body = {
+            "stockId": self.stockID
+        }
+        body_json = json.dumps(body, indent=None, ensure_ascii=False)
+        response = requests.post(
+            "https://uat-edaapi.nextpcb.com/edapluginsapi/v1/stock/detail",
             headers=headers,
+            data=body_json
         )
-        if r.status_code != requests.codes.ok:
+        if response.status_code != 200:
             self.report_part_data_fetch_error("non-OK HTTP response status")
 
-        data = r.json()
-        if not data.get("data"):
+        data = response.json()
+        wx.MessageBox(f"return data detail:{data}", "Help", style=wx.ICON_INFORMATION)
+        if not data.get("result"):
             self.report_part_data_fetch_error(
-                "returned JSON data does not have expected 'data' attribute"
+                "returned JSON data does not have expected 'result' attribute"
             )
-
+        if not data.get("result").get("stock"):
+            self.report_part_data_fetch_error(
+                "returned JSON data does not have expected 'stock' attribute"
+            )
+        
+        self.info = data.get("result").get("stock", {})
         parameters = {
-            "componentCode": "Component code",
-            "firstTypeNameEn": "Primary category",
-            "secondTypeNameEn": "Secondary category",
-            "componentBrandEn": "Brand",
-            "componentName": "Full name",
-            "componentDesignator": "Designator",
-            "componentModelEn": "Model",
-            "componentSpecificationEn": "Specification",
-            "describe": "Description",
-            "matchedPartDetail": "Details",
-            "stockCount": "Stock",
-            "leastNumber": "Minimal Quantity",
-            "leastNumberPrice": "Minimum price",
+            "goodsNo": "MPN",
+            "providerName": "Manufacturer",
+            "goodsDesc": "Description",
+            "encap": "Package / Footprint",
+            "categoryName": "Category",
+            "stockNumber": "Stock",
+            "minBuynum": "Minimum Order Quantity(MOQ)",
         }
         for k, v in parameters.items():
-            val = data.get("data", {}).get(k)
-            if val:
+            val = self.info.get(k, "-")
+            if val != "null" and val:
                 self.data_list.AppendItem([v, str(val)])
-        prices = data.get("data", {}).get("jlcPrices", [])
-        if prices:
-            for price in prices:
-                start = price.get("startNumber")
-                end = price.get("endNumber")
-                if end == -1:
-                    self.data_list.AppendItem(
-                        [
-                            f"NextPCB Price for >{start}",
-                            str(price.get("productPrice")),
-                        ]
-                    )
+            else:
+                self.data_list.AppendItem([v, "-"])
+        prices_stair = self.info.get("priceStair", [])
+        if prices_stair:
+            for price in prices_stair:
+                moq = price.get("purchase")
+                if moq < self.info.get("minBuynum"):
+                    continue
                 else:
                     self.data_list.AppendItem(
                         [
-                            f"NextPCB Price for {start}-{end}",
-                            str(price.get("productPrice")),
+                            f"NextPCB Stair Price ($) for >{moq}",
+                            str(price.get("hkPrice", "0")),
                         ]
                     )
-        prices = data.get("data", {}).get("prices", [])
-        if prices:
-            for price in prices:
-                start = price.get("startNumber")
-                end = price.get("endNumber")
-                if end == -1:
-                    self.data_list.AppendItem(
-                        [
-                            f"NextPCB Price for >{start}",
-                            str(price.get("productPrice")),
-                        ]
-                    )
-                else:
-                    self.data_list.AppendItem(
-                        [
-                            f"NextPCB Price for {start}-{end}",
-                            str(price.get("productPrice")),
-                        ]
-                    )
-        for attribute in data.get("data", {}).get("attributes", []):
+        else:
             self.data_list.AppendItem(
                 [
-                    attribute.get("attribute_name_en"),
-                    str(attribute.get("attribute_value_name")),
+                    f"NextPCB Stair Price ($)",
+                    "0",
                 ]
             )
-        picture = data.get("data", {}).get("minImage")
+        self.pdfurl = self.info.get("docUrl", "-")
+        self.data_list.AppendItem(
+            [
+                "Datasheet",
+                self.pdfurl,
+            ]
+        )
+        picture = self.info.get("goodsImage", [])
+        wx.MessageBox(f"{self.pdfurl}", "Help", style=wx.ICON_INFORMATION)
         if picture:
             # get the full resolution image instead of the thumbnail
             picture = picture.replace("96x96", "900x900")
@@ -221,18 +211,11 @@ class PartDetailsDialog(wx.Dialog):
                     int(200 * self.parent.scale_factor),
                 )
             )
-        self.pdfurl = data.get("data", {}).get("dataManualUrl")
-        self.data_list.AppendItem(
-            [
-                "Datasheet",
-                str(attribute.get("attribute_value_name")),
-            ]
-        )
 
     def report_part_data_fetch_error(self, reason):
         wx.MessageBox(
             f"Failed to download part detail from the NextPCB API ({reason})\r\n"
-            f"We looked for a part named:\r\n{self.part}\r\n[hint: did you fill in the NextPCB field correctly?]",
+            f"We looked for a part named:\r\n{self.stockID}\r\n[hint: did you fill in the NextPCB field correctly?]",
             "Error",
             style=wx.ICON_ERROR,
         )

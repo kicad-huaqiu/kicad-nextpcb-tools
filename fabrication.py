@@ -31,7 +31,7 @@ from pcbnew import (
     ToMM,
 )
 
-from helpers import get_exclude_from_pos, get_footprint_by_ref, get_smd, is_nightly
+from .helpers import get_exclude_from_pos, get_footprint_by_ref, get_smd, is_nightly
 
 
 class Fabrication:

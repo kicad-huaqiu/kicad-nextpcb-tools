@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pcbnew import GetBoard
 
-from helpers import (
+from .helpers import (
     get_exclude_from_bom,
     get_exclude_from_pos,
     get_lcsc_value,
@@ -23,7 +23,7 @@ class Store:
         self.logger = logging.getLogger(__name__)
         self.parent = parent
         self.project_path = project_path
-        self.datadir = os.path.join(self.project_path, "jlcpcb")
+        self.datadir = os.path.join(self.project_path, "nextpcb")
         self.dbfile = os.path.join(self.datadir, "project.db")
         self.order_by = "reference"
         self.order_dir = "ASC"
@@ -34,7 +34,7 @@ class Store:
         """Check if folders and database exist, setup if not"""
         if not os.path.isdir(self.datadir):
             self.logger.info(
-                "Data directory 'jlcpcb' does not exist and will be created."
+                "Data directory 'nextpcb' does not exist and will be created."
             )
             Path(self.datadir).mkdir(parents=True, exist_ok=True)
         self.create_db()
@@ -53,7 +53,7 @@ class Store:
             "reference",
             "value",
             "footprint",
-            "lcsc",
+            "mpn",
             "stock",
             "bomcheck",
             "poscheck",
@@ -79,7 +79,8 @@ class Store:
                     "bomcheck INT DEFAULT 1,"
                     "poscheck INT DEFAULT 1,"
                     "rotation TEXT,"
-                    "side TEXT"
+                    "side TEXT,"
+                    "stockid INT DEFAULT 0"
                     ")",
                 )
             cur.commit()
@@ -92,7 +93,8 @@ class Store:
                 return [
                     list(part)
                     for part in cur.execute(
-                        f"SELECT * FROM part_info ORDER BY {self.order_by} COLLATE naturalsort {self.order_dir}"
+                        f"SELECT reference, value, footprint, mpn, manufacturer, description, \
+                            bomcheck, poscheck, rotation, side FROM part_info ORDER BY {self.order_by} COLLATE naturalsort {self.order_dir}"
                     ).fetchall()
                 ]
 
@@ -100,11 +102,11 @@ class Store:
         """"""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
-                # Query all parts that are supposed to be in the BOM an have an lcsc number, group the references together
-                #subquery = "SELECT value, reference, footprint, lcsc FROM part_info WHERE bomcheck = '0' AND lcsc != '' ORDER BY lcsc, reference"
-                query = "SELECT GROUP_CONCAT(reference), value, footprint, lcsc, GROUP_CONCAT(manufacturer), \
+                # Query all parts that are supposed to be in the BOM an have an mpn number, group the references together
+                #subquery = "SELECT value, reference, footprint, mpn FROM part_info WHERE bomcheck = '0' AND mpn != '' ORDER BY mpn, reference"
+                query = "SELECT GROUP_CONCAT(reference), value, footprint, mpn, GROUP_CONCAT(manufacturer), \
                 GROUP_CONCAT(description), GROUP_CONCAT(bomcheck), GROUP_CONCAT(poscheck), GROUP_CONCAT(rotation), \
-                GROUP_CONCAT(side) FROM part_info GROUP BY value, footprint, lcsc"
+                GROUP_CONCAT(side) FROM part_info GROUP BY value, footprint, mpn"
                 a = [list(part) for part in cur.execute(query).fetchall()]
 
                 return a
@@ -113,12 +115,12 @@ class Store:
         """Read all parts that should be included in the BOM."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
-                # Query all parts that are supposed to be in the BOM an have an lcsc number, group the references together
+                # Query all parts that are supposed to be in the BOM an have an mpn number, group the references together
                 subquery = "SELECT value, reference, footprint, mpn FROM part_info WHERE bomcheck = '1' AND mpn != '' ORDER BY mpn, reference"
                 query = f"SELECT value, GROUP_CONCAT(reference) AS refs, footprint, mpn  FROM ({subquery}) GROUP BY mpn"
                 a = [list(part) for part in cur.execute(query).fetchall()]
-                # Query all parts that are supposed to be in the BOM but have no lcsc number
-                query = "SELECT value, reference, footprint, mpn FROM part_info WHERE bomcheck = '1' AND lcsc = ''"
+                # Query all parts that are supposed to be in the BOM but have no mpn number
+                query = "SELECT value, reference, footprint, mpn FROM part_info WHERE bomcheck = '1' AND mpn = ''"
                 b = [list(part) for part in cur.execute(query).fetchall()]
                 return a + b
 
@@ -135,17 +137,17 @@ class Store:
         """Create a part in the database."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
-                cur.execute("INSERT INTO part_info VALUES (?,?,?,?,?,?,?,?,?,?)", part)
+                cur.execute("INSERT INTO part_info VALUES (?,?,?,?,?,?,?,?,?,?,?)", part)
                 cur.commit()
 
     def update_part(self, part):
-        """Update a part in the database, overwrite lcsc if supplied."""
+        """Update a part in the database, overwrite mpn if supplied."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
-                if len(part) == 10:
+                if len(part) == 11:
                     cur.execute(
-                        "UPDATE part_info set value = ?, footprint = ?, lcsc = ?, manufacturer = ?, \
-                        description = ?, bomcheck = ?, poscheck = ?, rotation = ?, side = ? WHERE reference = ?",
+                        "UPDATE part_info set value = ?, footprint = ?, mpn = ?, manufacturer = ?, \
+                        description = ?, bomcheck = ?, poscheck = ?, rotation = ?, side = ?, stockid = ? WHERE reference = ?",
                         part[1:] + part[0:1],
                     )
                 else:
@@ -225,6 +227,23 @@ class Store:
                 )
                 cur.commit()
 
+    def set_stock_id(self, ref, value):
+        """Change the BOM attribute for a part in the database."""
+        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            with con as cur:
+                cur.execute(
+                    f"UPDATE part_info SET stockid = '{value}' WHERE reference = '{ref}'"
+                )
+                cur.commit()
+
+    def get_stock_id(self, ref):
+        """Get a part from the database by its reference."""
+        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            with con as cur:
+                return cur.execute(
+                    f"SELECT stockid FROM part_info WHERE reference = '{ref}'"
+                ).fetchone()
+
     def update_from_board(self):
         """Read all footprints from the board and insert them into the database if they do not exist."""
         board = GetBoard()
@@ -242,6 +261,7 @@ class Store:
                 #get_exclude_from_pos(fp),
                 '',
                 '',
+                0,
             ]
             dbpart = self.get_part(part[0])
             # if part is not in the database yet, create it
@@ -255,31 +275,31 @@ class Store:
                 if part[0:3] == list(dbpart[0:3]) and part[4:] == [
                     bool(x) for x in dbpart[5:]
                 ]:
-                    #if part in the database, has no lcsc value the board part has a lcsc value, update including lcsc
+                    #if part in the database, has no mpn value the board part has a mpn value, update including mpn
                     if dbpart and not dbpart[3] and part[3]:
                         self.logger.debug(
-                            f"Part {part[0]} is already in the database but without lcsc value, so the value supplied from the board will be set."
+                            f"Part {part[0]} is already in the database but without mpn value, so the value supplied from the board will be set."
                         )
                         self.update_part(part)
-                    #if part in the database, has a lcsc value
+                    #if part in the database, has a mpn value
                     elif dbpart and dbpart[3] and part[3]:
-                        #update lcsc value as well if setting is accordingly
+                        #update mpn value as well if setting is accordingly
                         if not self.parent.settings.get("general", {}).get(
                             "lcsc_priority", True
                         ):
                             self.logger.debug(
-                                f"Part {part[0]} is already in the database and has a lcsc value, the value supplied from the board will be ignored."
+                                f"Part {part[0]} is already in the database and has a mpn value, the value supplied from the board will be ignored."
                             )
                             part.pop(3)
                         else:
                             self.logger.debug(
-                                f"Part {part[0]} is already in the database and has a lcsc value, the value supplied from the board will overwrite that in the database."
+                                f"Part {part[0]} is already in the database and has a mpn value, the value supplied from the board will overwrite that in the database."
                             )
                         self.update_part(part)
                 else:
-                    #If something changed, we overwrite the part and dump the lcsc value or use the one supplied by the board
+                    #If something changed, we overwrite the part and dump the mpn value or use the one supplied by the board
                     self.logger.debug(
-                        f"Part {part[0]} is already in the database but value, footprint, bom or pos values changed in the board file, part will be updated, lcsc overwritten/cleared."
+                        f"Part {part[0]} is already in the database but value, footprint, bom or pos values changed in the board file, part will be updated, mpn overwritten/cleared."
                     )
                     self.update_part(part)
         self.import_legacy_assignments()
@@ -301,10 +321,10 @@ class Store:
         if os.path.isfile(csv_file):
             with open(csv_file) as f:
                 csvreader = csv.DictReader(
-                    f, fieldnames=("reference", "lcsc", "bom", "pos")
+                    f, fieldnames=("reference", "mpn", "bom", "pos")
                 )
                 for row in csvreader:
-                    self.set_lcsc(row["reference"], row["lcsc"])
+                    self.set_lcsc(row["reference"], row["mpn"])
                     self.set_bom(row["reference"], row["bom"])
                     self.set_pos(row["reference"], row["pos"])
                     self.logger.debug(

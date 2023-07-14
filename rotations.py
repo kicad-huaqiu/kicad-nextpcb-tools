@@ -5,10 +5,10 @@ import os
 import requests
 import wx
 
-from events import (
+from .events import (
     PopulateFootprintListEvent,
 )
-from helpers import PLUGIN_PATH, HighResWxSize, loadBitmapScaled
+from .helpers import PLUGIN_PATH, HighResWxSize, loadBitmapScaled
 
 
 class RotationManagerDialog(wx.Dialog):
