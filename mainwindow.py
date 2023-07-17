@@ -915,14 +915,27 @@ class NextPCBTools(wx.Dialog):
         )
 
     def show_part_details_dialog(self, stockID):
-        wx.BeginBusyCursor()
-        try:
+        if stockID != "":
+            wx.BeginBusyCursor()
+            try:
+                dialog = PartDetailsDialog(self.parent, int(stockID))
+                dialog.ShowModal()
+            finally:
+                wx.EndBusyCursor()
+        else:
+            wx.MessageBox(
+                "Failed to get part stockID from NextPCB\r\n",
+                "Error",
+                style=wx.ICON_ERROR,
+            )
+        # wx.BeginBusyCursor()
+        # try:
             # self.logger.info(f"Opening PartDetailsDialog window for part with value: '{part} (this should be "
-            #                 f"an LCSC identifier)'")
-            dialog = PartDetailsDialog(self, stockID)
-            dialog.ShowModal()
-        finally:
-            wx.EndBusyCursor()
+                            # f"an LCSC identifier)'")
+            # dialog = PartDetailsDialog(self, stockID)
+            # dialog.ShowModal()
+        # finally:
+            # wx.EndBusyCursor()
 
     def update_library(self, e=None):
         """Update the library from the JLCPCB CSV file."""

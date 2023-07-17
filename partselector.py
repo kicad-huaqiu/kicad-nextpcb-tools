@@ -104,7 +104,7 @@ class PartSelectorDialog(wx.Dialog):
         self.package = wx.TextCtrl(
             self,
             wx.ID_ANY,
-            self.part_info[3],
+            "",
             wx.DefaultPosition,
             HighResWxSize(parent.window, wx.Size(300, 24)),
             wx.TE_PROCESS_ENTER,
@@ -420,7 +420,7 @@ class PartSelectorDialog(wx.Dialog):
         self.page = 1    
         body = {
             "keyword": search_keyword,
-            "limit": 200,
+            "limit": 50,
             "page": self.page,
             "supplier": [],
             "supplierSort": []
@@ -480,13 +480,13 @@ class PartSelectorDialog(wx.Dialog):
         self.MPN_stockID_dict.clear()
         if self.search_part_list is None:
             return
-        if self.total_num >= 200:
-            self.result_count.SetLabel("200 Results (limited)")
+        if self.total_num >= 1000:
+            self.result_count.SetLabel("1000 Results (limited)")
         else:
             self.result_count.SetLabel(f"{self.total_num} Results")
 
         parameters = [
-            "goodsNo",
+            "goodsName",
             "providerName",
             "goodsDesc",
             "encap",

@@ -158,7 +158,7 @@ class PartDetailsDialog(wx.Dialog):
         
         self.info = data.get("result").get("stock", {})
         parameters = {
-            "goodsNo": "MPN",
+            "goodsName": "MPN",
             "providerName": "Manufacturer",
             "goodsDesc": "Description",
             "encap": "Package / Footprint",
@@ -173,6 +173,7 @@ class PartDetailsDialog(wx.Dialog):
             else:
                 self.data_list.AppendItem([v, "-"])
         prices_stair = self.info.get("priceStair", [])
+        wx.MessageBox(f"priceStair:{prices_stair}", "Help", style=wx.ICON_INFORMATION)
         if prices_stair:
             for price in prices_stair:
                 moq = price.get("purchase")
@@ -203,7 +204,7 @@ class PartDetailsDialog(wx.Dialog):
         wx.MessageBox(f"{self.pdfurl}", "Help", style=wx.ICON_INFORMATION)
         if picture:
             # get the full resolution image instead of the thumbnail
-            picture = picture.replace("96x96", "900x900")
+            #picture = picture.replace("96x96", "900x900")
             self.image.SetBitmap(
                 self.get_scaled_bitmap(
                     picture,
