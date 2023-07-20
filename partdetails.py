@@ -146,7 +146,7 @@ class PartDetailsDialog(wx.Dialog):
             self.report_part_data_fetch_error("non-OK HTTP response status")
 
         data = response.json()
-        wx.MessageBox(f"return data detail:{data}", "Help", style=wx.ICON_INFORMATION)
+        #wx.MessageBox(f"return data detail:{data}", "Help", style=wx.ICON_INFORMATION)
         if not data.get("result"):
             self.report_part_data_fetch_error(
                 "returned JSON data does not have expected 'result' attribute"
@@ -173,7 +173,7 @@ class PartDetailsDialog(wx.Dialog):
             else:
                 self.data_list.AppendItem([v, "-"])
         prices_stair = self.info.get("priceStair", [])
-        wx.MessageBox(f"priceStair:{prices_stair}", "Help", style=wx.ICON_INFORMATION)
+        #wx.MessageBox(f"priceStair:{prices_stair}", "Help", style=wx.ICON_INFORMATION)
         if prices_stair:
             for price in prices_stair:
                 moq = price.get("purchase")
@@ -194,17 +194,19 @@ class PartDetailsDialog(wx.Dialog):
                 ]
             )
         self.pdfurl = self.info.get("docUrl", "-")
+        self.pdfurl = "-" if self.pdfurl == "" else self.pdfurl
         self.data_list.AppendItem(
             [
                 "Datasheet",
                 self.pdfurl,
             ]
         )
-        picture = self.info.get("goodsImage", [])
-        wx.MessageBox(f"{self.pdfurl}", "Help", style=wx.ICON_INFORMATION)
+        picture = self.info.get("goodsImage", [])[0]
+        #wx.MessageBox(f"self.pdfurl{self.pdfurl}", "Help", style=wx.ICON_INFORMATION)
+        #wx.MessageBox(f"picture{picture}", "Help", style=wx.ICON_INFORMATION)
         if picture:
             # get the full resolution image instead of the thumbnail
-            #picture = picture.replace("96x96", "900x900")
+            picture = "https:" + picture
             self.image.SetBitmap(
                 self.get_scaled_bitmap(
                     picture,

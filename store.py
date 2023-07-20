@@ -104,9 +104,9 @@ class Store:
             with con as cur:
                 # Query all parts that are supposed to be in the BOM an have an mpn number, group the references together
                 #subquery = "SELECT value, reference, footprint, mpn FROM part_info WHERE bomcheck = '0' AND mpn != '' ORDER BY mpn, reference"
-                query = "SELECT GROUP_CONCAT(reference), value, footprint, mpn, GROUP_CONCAT(manufacturer), \
+                query = "SELECT GROUP_CONCAT(reference), value, footprint, mpn, manufacturer, \
                 GROUP_CONCAT(description), GROUP_CONCAT(bomcheck), GROUP_CONCAT(poscheck), GROUP_CONCAT(rotation), \
-                GROUP_CONCAT(side) FROM part_info GROUP BY value, footprint, mpn"
+                GROUP_CONCAT(side) FROM part_info GROUP BY value, footprint, mpn, manufacturer"
                 a = [list(part) for part in cur.execute(query).fetchall()]
 
                 return a
@@ -116,11 +116,11 @@ class Store:
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
                 # Query all parts that are supposed to be in the BOM an have an mpn number, group the references together
-                subquery = "SELECT value, reference, footprint, mpn FROM part_info WHERE bomcheck = '1' AND mpn != '' ORDER BY mpn, reference"
+                subquery = "SELECT value, reference, footprint, mpn FROM part_info WHERE bomcheck = 1 AND mpn != '' ORDER BY mpn, reference"
                 query = f"SELECT value, GROUP_CONCAT(reference) AS refs, footprint, mpn  FROM ({subquery}) GROUP BY mpn"
                 a = [list(part) for part in cur.execute(query).fetchall()]
                 # Query all parts that are supposed to be in the BOM but have no mpn number
-                query = "SELECT value, reference, footprint, mpn FROM part_info WHERE bomcheck = '1' AND mpn = ''"
+                query = "SELECT value, reference, footprint, mpn FROM part_info WHERE bomcheck = 1 AND mpn = ''"
                 b = [list(part) for part in cur.execute(query).fetchall()]
                 return a + b
 
@@ -130,7 +130,7 @@ class Store:
             con.create_collation("naturalsort", natural_sort_collation)
             with con as cur:
                 # Query all parts that are supposed to be in the POS
-                query = "SELECT reference, value, footprint FROM part_info WHERE poscheck = '1' ORDER BY reference COLLATE naturalsort ASC"
+                query = "SELECT reference, value, footprint FROM part_info WHERE poscheck = 1 ORDER BY reference COLLATE naturalsort ASC"
                 return [list(part) for part in cur.execute(query).fetchall()]
 
     def create_part(self, part):
@@ -178,7 +178,7 @@ class Store:
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
                 cur.execute(
-                    f"UPDATE part_info SET stock = '{int(stock)}' WHERE reference = '{ref}'"
+                    f"UPDATE part_info SET stock = {int(stock)} WHERE reference = '{ref}'"
                 )
                 cur.commit()
 
@@ -232,7 +232,7 @@ class Store:
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
                 cur.execute(
-                    f"UPDATE part_info SET stockid = '{value}' WHERE reference = '{ref}'"
+                    f"UPDATE part_info SET stockid = {int(value)} WHERE reference = '{ref}'"
                 )
                 cur.commit()
 
@@ -242,7 +242,7 @@ class Store:
             with con as cur:
                 return cur.execute(
                     f"SELECT stockid FROM part_info WHERE reference = '{ref}'"
-                ).fetchone()
+                ).fetchone()[0]
 
     def update_from_board(self):
         """Read all footprints from the board and insert them into the database if they do not exist."""
@@ -255,10 +255,8 @@ class Store:
                 get_lcsc_value(fp),
                 '',
                 '',
-                1,
-                1,
-                #get_exclude_from_bom(fp),
-                #get_exclude_from_pos(fp),
+                int(not get_exclude_from_bom(fp)),
+                int(not get_exclude_from_pos(fp)),
                 '',
                 '',
                 0,

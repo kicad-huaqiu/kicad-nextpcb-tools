@@ -7,7 +7,9 @@ import sys
 import wx
 import wx.adv as adv
 import wx.dataview
-from pcbnew import GetBoard, GetBuildVersion
+import requests
+import webbrowser
+from pcbnew import GetBoard, GetBuildVersion, ToMM
 
 from .events import (
     EVT_ASSIGN_PARTS_EVENT,
@@ -62,6 +64,115 @@ ID_CONTEXT_MENU_ADD_ROT_BY_PACKAGE = wx.NewIdRef()
 ID_CONTEXT_MENU_ADD_ROT_BY_NAME = wx.NewIdRef()
 #ID_EXPORT_TO_SCHEMATIC = 16
 
+
+class FootPrintList(wx.dataview.DataViewListCtrl):
+    def __init__(
+            self,
+            parent,
+            mainwindows,
+            id=wx.ID_ANY,
+            pos=wx.DefaultPosition,
+            size=wx.DefaultSize,
+            style=wx.dataview.DV_MULTIPLE):
+        wx.dataview.DataViewListCtrl.__init__(self, parent, id, pos, size, style)
+        
+        self.SetMinSize(HighResWxSize(mainwindows.window, wx.Size(900, 400)))
+        self.idx = self.AppendTextColumn(
+            "index",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=int(mainwindows.scale_factor * 50),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.reference = self.AppendTextColumn(
+            "Reference",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=int(mainwindows.scale_factor * 80),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.value = self.AppendTextColumn(
+            "Value",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=int(mainwindows.scale_factor * 100),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.footprint = self.AppendTextColumn(
+            "Footprint",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=int(mainwindows.scale_factor * 300),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.lcsc = self.AppendTextColumn(
+            "MPN",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=int(mainwindows.scale_factor * 100),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.type_column = self.AppendTextColumn(
+            "Manufacturer",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=int(mainwindows.scale_factor * 200),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.stock = self.AppendTextColumn(
+            "Description",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=int(mainwindows.scale_factor * 200),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.bom = self.AppendToggleColumn(
+            "BOM",
+            mode=wx.dataview.DATAVIEW_CELL_ACTIVATABLE,
+            width=int(mainwindows.scale_factor * 60),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.pos = self.AppendToggleColumn(
+            "POS",
+            mode=wx.dataview.DATAVIEW_CELL_ACTIVATABLE,
+            width=int(mainwindows.scale_factor * 60),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.rot = self.AppendTextColumn(
+            "Rotation",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=int(mainwindows.scale_factor * 80),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.side = self.AppendTextColumn(
+            "Side",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=int(mainwindows.scale_factor * 50),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.AppendTextColumn(
+            "",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=1,
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        #table_sizer.Add(self.footprint_list, 20, wx.ALL | wx.EXPAND, 5)
+        self.Bind(
+            wx.dataview.EVT_DATAVIEW_COLUMN_HEADER_CLICK, mainwindows.OnSortFootprintList
+        )
+        self.Bind(
+            wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED, mainwindows.OnFootprintSelected
+        )
+        self.Bind(
+            wx.dataview.EVT_DATAVIEW_ITEM_CONTEXT_MENU, mainwindows.OnRightDown
+        )
+        self.Bind(wx.dataview.EVT_DATAVIEW_ITEM_ACTIVATED, mainwindows.get_part_details)
+        self.Bind(wx.dataview.EVT_DATAVIEW_ITEM_VALUE_CHANGED, mainwindows.toggle_update_to_db)
 
 class NextPCBTools(wx.Dialog):
     def __init__(self, parent):
@@ -209,9 +320,9 @@ class NextPCBTools(wx.Dialog):
         self.upper_toolbar.Realize()
 
         self.Bind(wx.EVT_COMBOBOX, self.group_parts, self.cb_group_strategy)
-        self.Bind(wx.EVT_TOOL, self.auto_match_parts, self.auto_match_button)
-        self.Bind(wx.EVT_TOOL, self.generate_fabrication_data, self.generate_button)
-        self.Bind(wx.EVT_TOOL, self.generate_data_place_order, self.generate_place_order_button)
+        self.Bind(wx.EVT_BUTTON, self.auto_match_parts, self.auto_match_button)
+        self.Bind(wx.EVT_BUTTON, self.generate_fabrication_data, self.generate_button)
+        self.Bind(wx.EVT_BUTTON, self.generate_data_place_order, self.generate_place_order_button)
         self.Bind(wx.EVT_TOOL, self.manage_rotations, self.rotation_button)
         self.Bind(wx.EVT_TOOL, self.manage_mappings, self.mapping_button)
         #self.Bind(wx.EVT_TOOL, self.update_library, self.download_button)
@@ -254,41 +365,6 @@ class NextPCBTools(wx.Dialog):
         self.down_toolbar.AddControl(self.remove_part_button)
         self.down_toolbar.AddSeparator()
 
-        # self.select_alike_button = wx.Button(
-            # self.down_toolbar,
-            # ID_SELECT_SAME_PARTS,
-            # " Select Same Part "
-        # )
-        # self.select_alike_button.SetDefault()
-        # self.down_toolbar.AddControl(self.select_alike_button)
-        # self.down_toolbar.AddSeparator()
-
-        # self.part_details_button = wx.Button(
-            # self.down_toolbar,
-            # ID_PART_DETAILS,
-            # " Part Details "
-        # )
-        # self.part_details_button.SetDefault()
-        # self.down_toolbar.AddControl(self.part_details_button)
-        # self.down_toolbar.AddSeparator()
-        # self.toggle_bom_button = wx.Button(
-            # self.down_toolbar,
-            # ID_TOGGLE_BOM,
-            # " Toggle BOM "
-        # )
-        # self.toggle_bom_button.SetDefault()
-        # self.down_toolbar.AddControl(self.toggle_bom_button)
-        # self.down_toolbar.AddSeparator()
-
-        # self.toggle_pos_button = wx.Button(
-            # self.down_toolbar,
-            # ID_TOGGLE_POS,
-            # " Toggle POS "
-        # )
-        # self.toggle_pos_button.SetDefault()
-        # self.down_toolbar.AddControl(self.toggle_pos_button)
-        # self.down_toolbar.AddSeparator()
-
         self.save_all_button = wx.Button(
             self.down_toolbar,
             ID_SAVE_MAPPINGS,
@@ -303,13 +379,6 @@ class NextPCBTools(wx.Dialog):
 
         self.Bind(wx.EVT_BUTTON, self.select_part, self.select_part_button)
         self.Bind(wx.EVT_BUTTON, self.remove_part, self.remove_part_button)
-        #self.Bind(wx.EVT_BUTTON, self.select_alike, self.select_alike_button)
-        #self.Bind(wx.EVT_TOOL, self.toggle_bom_pos, self.toggle_bom_pos_button)
-        #self.Bind(wx.EVT_TOOL, self.toggle_bom, self.toggle_bom_button)
-        #self.Bind(wx.EVT_TOOL, self.toggle_pos, self.toggle_pos_button)
-        #self.Bind(wx.EVT_BUTTON, self.get_part_details, self.part_details_button)
-        #self.Bind(wx.EVT_TOOL, self.OnBomHide, self.hide_bom_button)
-        #self.Bind(wx.EVT_TOOL, self.OnPosHide, self.hide_pos_button)
         self.Bind(wx.EVT_BUTTON, self.save_all_mappings, self.save_all_button)
         #self.Bind(wx.EVT_TOOL, self.export_to_schematic, self.export_schematic_button)
 
@@ -322,135 +391,36 @@ class NextPCBTools(wx.Dialog):
 
         self.notebook = wx.Notebook(self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, 0)
         self.first_panel = wx.Panel(self.notebook, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.TAB_TRAVERSAL)
-        grid_sizer1 = wx.GridSizer(0, 1, 0, 0)
-        
-        #self.m_dataViewListCtrl10 = wx.dataview.DataViewListCtrl( self.first_panel, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, 0 )        
-        self.first_panel.SetSizer(grid_sizer1)
+        #self.m_dataViewListCtrl10 = wx.dataview.DataViewListCtrl( self.first_panel, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, 0 )
         self.first_panel.Layout()
-        grid_sizer1.Fit(self.first_panel)
         self.notebook.AddPage(self.first_panel, "All", True)
-        
+        # grid_sizer1 = wx.GridSizer(0, 1, 0, 0)
+        # self.first_panel.SetSizer(grid_sizer1)
+        # grid_sizer1.Fit(self.first_panel)
+        # self.footprint_list = FootPrintList(self.first_panel, self)
+        # grid_sizer1.Add(self.footprint_list, 20, wx.ALL | wx.EXPAND, 5)
+        grid_sizer1 = wx.GridSizer(0, 1, 0, 0)
+        self.first_panel.SetSizer(grid_sizer1)
+        grid_sizer1.Fit(self.first_panel)
+        self.fplist_all = FootPrintList(self.first_panel, self)
+        grid_sizer1.Add(self.fplist_all, 20, wx.ALL | wx.EXPAND, 5)
+        self.selected_page_index = 0
+
         self.second_panel = wx.Panel(self.notebook, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.TAB_TRAVERSAL)
-        grid_sizer2 = wx.GridSizer(0, 1, 0, 0)
-        
-        self.second_panel.SetSizer(grid_sizer2)
         self.second_panel.Layout()
-        grid_sizer2.Fit(self.second_panel)
         self.notebook.AddPage(self.second_panel, "Unmanaged", False)
         
+        
+        grid_sizer2 = wx.GridSizer(0, 1, 0, 0)
+        grid_sizer2.Fit(self.second_panel)
+        self.second_panel.SetSizer(grid_sizer2)
+        self.fplist_unmana = FootPrintList(self.second_panel, self)
+        grid_sizer2.Add(self.fplist_unmana, 20, wx.ALL | wx.EXPAND, 5)
+
+        self.notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.on_notebook_page_changed)
+
+        #self.on_notebook_page_changed(wx.EVT_NOTEBOOK_PAGE_CHANGED)
         table_sizer.Add(self.notebook, 20, wx.EXPAND |wx.ALL, 5)
-
-        #class main
-        self.footprint_list = wx.dataview.DataViewListCtrl(
-            self.first_panel,
-            wx.ID_ANY,
-            wx.DefaultPosition,
-            wx.DefaultSize,
-            style=wx.dataview.DV_MULTIPLE,
-        )
-        self.footprint_list.SetMinSize(HighResWxSize(self.window, wx.Size(900, 400)))
-        self.idx = self.footprint_list.AppendTextColumn(
-            "index",
-            mode=wx.dataview.DATAVIEW_CELL_INERT,
-            width=int(self.scale_factor * 50),
-            align=wx.ALIGN_CENTER,
-            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
-        )
-        self.reference = self.footprint_list.AppendTextColumn(
-            "Reference",
-            mode=wx.dataview.DATAVIEW_CELL_INERT,
-            width=int(self.scale_factor * 80),
-            align=wx.ALIGN_CENTER,
-            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
-        )
-        self.value = self.footprint_list.AppendTextColumn(
-            "Value",
-            mode=wx.dataview.DATAVIEW_CELL_INERT,
-            width=int(self.scale_factor * 100),
-            align=wx.ALIGN_CENTER,
-            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
-        )
-        self.footprint = self.footprint_list.AppendTextColumn(
-            "Footprint",
-            mode=wx.dataview.DATAVIEW_CELL_INERT,
-            width=int(self.scale_factor * 300),
-            align=wx.ALIGN_CENTER,
-            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
-        )
-        self.lcsc = self.footprint_list.AppendTextColumn(
-            "MPN",
-            mode=wx.dataview.DATAVIEW_CELL_INERT,
-            width=int(self.scale_factor * 100),
-            align=wx.ALIGN_CENTER,
-            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
-        )
-        self.type_column = self.footprint_list.AppendTextColumn(
-            "Manufacturer",
-            mode=wx.dataview.DATAVIEW_CELL_INERT,
-            width=int(self.scale_factor * 200),
-            align=wx.ALIGN_CENTER,
-            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
-        )
-        self.stock = self.footprint_list.AppendTextColumn(
-            "Description",
-            mode=wx.dataview.DATAVIEW_CELL_INERT,
-            width=int(self.scale_factor * 200),
-            align=wx.ALIGN_CENTER,
-            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
-        )
-        self.bom = self.footprint_list.AppendToggleColumn(
-            "BOM",
-            mode=wx.dataview.DATAVIEW_CELL_ACTIVATABLE,
-            width=int(self.scale_factor * 60),
-            align=wx.ALIGN_CENTER,
-            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
-        )
-        self.pos = self.footprint_list.AppendToggleColumn(
-            "POS",
-            mode=wx.dataview.DATAVIEW_CELL_ACTIVATABLE,
-            width=int(self.scale_factor * 60),
-            align=wx.ALIGN_CENTER,
-            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
-        )
-        self.rot = self.footprint_list.AppendTextColumn(
-            "Rotation",
-            mode=wx.dataview.DATAVIEW_CELL_INERT,
-            width=int(self.scale_factor * 80),
-            align=wx.ALIGN_CENTER,
-            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
-        )
-        self.side = self.footprint_list.AppendTextColumn(
-            "Side",
-            mode=wx.dataview.DATAVIEW_CELL_INERT,
-            width=int(self.scale_factor * 50),
-            align=wx.ALIGN_CENTER,
-            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
-        )
-        self.footprint_list.AppendTextColumn(
-            "",
-            mode=wx.dataview.DATAVIEW_CELL_INERT,
-            width=1,
-            align=wx.ALIGN_CENTER,
-            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
-        )
-        grid_sizer1.Add(self.footprint_list, 20, wx.ALL | wx.EXPAND, 5)
-        grid_sizer2.Add(self.footprint_list, 20, wx.ALL | wx.EXPAND, 5)
-        #table_sizer.Add(self.footprint_list, 20, wx.ALL | wx.EXPAND, 5)
-
-        self.footprint_list.Bind(
-            wx.dataview.EVT_DATAVIEW_COLUMN_HEADER_CLICK, self.OnSortFootprintList
-        )
-
-        self.footprint_list.Bind(
-            wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED, self.OnFootprintSelected
-        )
-
-        self.footprint_list.Bind(
-            wx.dataview.EVT_DATAVIEW_ITEM_CONTEXT_MENU, self.OnRightDown
-        )
-
-        self.footprint_list.Bind(wx.dataview.EVT_DATAVIEW_ITEM_ACTIVATED, self.get_part_details)
-        self.footprint_list.Bind(wx.dataview.EVT_DATAVIEW_ITEM_VALUE_CHANGED, self.toggle_update_to_db)
 
         table_sizer.Add(self.down_toolbar, 1, wx.ALL | wx.EXPAND, 5)
         # ---------------------------------------------------------------------
@@ -506,13 +476,35 @@ class NextPCBTools(wx.Dialog):
 
         self.init_logger()
         self.init_library()
+        self.on_notebook_page_changed(None)
         self.init_fabrication()
         if self.library.state == LibraryState.UPDATE_NEEDED:
             self.library.update()
         else:
             self.init_store()
-        
         self.library.create_mapping_table()
+
+
+    def on_notebook_page_changed(self, e):
+        self.selected_page_index = self.notebook.GetSelection()
+        if self.selected_page_index == 0:
+            self.footprint_list = self.fplist_all
+            # grid_sizer1 = wx.GridSizer(0, 1, 0, 0)
+            # self.first_panel.SetSizer(grid_sizer1)
+            # grid_sizer1.Fit(self.first_panel)
+            # self.footprint_list = FootPrintList(self.first_panel, self)
+            # grid_sizer1.Add(self.footprint_list, 20, wx.ALL | wx.EXPAND, 5)
+        elif self.selected_page_index == 1:
+            self.footprint_list = self.fplist_unmana
+            # grid_sizer2 = wx.GridSizer(0, 1, 0, 0)
+            # grid_sizer2.Fit(self.second_panel)
+            # self.second_panel.SetSizer(grid_sizer2)
+            # self.footprint_list = FootPrintList(self.second_panel, self)
+            # grid_sizer2.Add(self.footprint_list, 20, wx.ALL | wx.EXPAND, 5)
+
+        if self.library.state == LibraryState.INITIALIZED:
+            self.populate_footprint_list()  
+            
 
     def quit_dialog(self, e):
         """Destroy dialog on close"""
@@ -560,11 +552,23 @@ class NextPCBTools(wx.Dialog):
         return parts
 
     def auto_match_parts(self, e):
-        pass
+        #get all part from UI
+        
+        #send request, parse rsp
+
+        #update db
+
+        #populate ui
+
+
+
+
+
 
     def generate_fabrication_data(self, e):
         """Generate fabrication data."""
         self.fabrication.fill_zones()
+        #wx.MessageBox("fillzones:", "Help", style=wx.ICON_INFORMATION)
         # layer_selection = self.layer_selection.GetSelection()
         # if layer_selection != 0:
             # layer_count = int(self.layer_selection.GetString(layer_selection)[:1])
@@ -572,27 +576,52 @@ class NextPCBTools(wx.Dialog):
             # layer_count = None
         self.fabrication.generate_geber(None)
         self.fabrication.generate_excellon()
+        #wx.MessageBox("generate excellon:", "Help", style=wx.ICON_INFORMATION)
         self.fabrication.zip_gerber_excellon()
+        #wx.MessageBox("zip:", "Help", style=wx.ICON_INFORMATION)
         self.fabrication.generate_cpl()
+        #wx.MessageBox("CPL:", "Help", style=wx.ICON_INFORMATION)
         self.fabrication.generate_bom()
+        wx.MessageBox("BOM:", "Help", style=wx.ICON_INFORMATION)
+
 
     def generate_data_place_order(self, e):
-        self.generate_fabrication_data(self, e)
+        self.generate_fabrication_data(e)
+        self.place_order_request()
         
+    def generate_nextpcb_json(self):
+        pass
+
+
+    def place_order_request(self):
+        zipname = f"GERBER-{self.fabrication.filename.split('.')[0]}.zip"
+        zipfile = os.path.join(self.fabrication.outputdir, zipname)
+        files = {'file': open(zipfile, 'rb')}
+        upload_url = "https://www.nextpcb.com/Upfile/kiCadUpFile"
+        data = {
+            "type": "pcbfile",
+            "bwidth": ToMM(GetBoard().GetBoardEdgesBoundingBox().GetWidth()),
+            "blength": ToMM(GetBoard().GetBoardEdgesBoundingBox().GetHeight()),
+            "blayer": GetBoard().GetCopperLayerCount() if hasattr(GetBoard(), 'GetCopperLayerCount') else ""
+        }
+        rsp = requests.post(
+            upload_url,
+            files=files,
+            data=data
+        )
+        urls = json.loads(rsp.content)
+        webbrowser.open(urls['redirect'])
 
     def assign_parts(self, e):
         """Assign a selected LCSC number to parts"""
+        #wx.MessageBox(f"e.references:{e.references}", "Help", style=wx.ICON_INFORMATION)
         for reference in e.references:
-            wx.MessageBox(f"reference:{reference}", "Help", style=wx.ICON_INFORMATION)
-            wx.MessageBox(f"e.mpn:{e.mpn}", "Help", style=wx.ICON_INFORMATION)
+            #wx.MessageBox(f"references:{reference}", "Help", style=wx.ICON_INFORMATION)
             self.store.set_lcsc(reference, e.mpn)
-            wx.MessageBox(f"e.mpn:{e.mpn}", "Help", style=wx.ICON_INFORMATION)
             self.store.set_manufacturer(reference, e.manufacturer)
             self.store.set_description(reference, e.description)
-            wx.MessageBox(f"e.description:{e.description}", "Help", style=wx.ICON_INFORMATION)
             self.store.set_stock_id(reference, e.stock_id)
-            
-            wx.MessageBox(f"get_part:{self.store.get_part(reference)}", "Help", style=wx.ICON_INFORMATION)
+            #wx.MessageBox(f"e.stock_id:{e.stock_id}", "Help", style=wx.ICON_INFORMATION)
         
         self.populate_footprint_list()
 
@@ -681,6 +710,8 @@ class NextPCBTools(wx.Dialog):
                         # break
             
             part.insert(0, f'{idx}')
+            if self.selected_page_index == 1 and part[4]:
+                continue
             self.footprint_list.AppendItem(part)
 
     def OnSortFootprintList(self, e):
@@ -808,7 +839,7 @@ class NextPCBTools(wx.Dialog):
     def toggle_bom(self, e):
         """Toggle the exclude from BOM attribute of a footprint."""
         selected_rows = []
-        self.logger.debug("toggle bom")
+        #self.logger.debug("toggle bom")
         for item in self.footprint_list.GetSelections():
             row = self.footprint_list.ItemToRow(item)
             selected_rows.append(row)
@@ -816,7 +847,9 @@ class NextPCBTools(wx.Dialog):
             for ref in refs:
                 #fp = get_footprint_by_ref(GetBoard(), ref)[0]
                 bom = self.footprint_list.GetValue(row, 7)
+                #wx.MessageBox(f"stockID:{bom}", "Help", style=wx.ICON_INFORMATION)
                 self.store.set_bom(ref, bom)
+                
         self.populate_footprint_list()
         for row in selected_rows:
             self.footprint_list.SelectRow(row)
@@ -847,7 +880,11 @@ class NextPCBTools(wx.Dialog):
                     #get_footprint_by_ref(GetBoard(), iter_ref)[0]
                     self.store.set_lcsc(iter_ref, "")
                     self.store.set_manufacturer(iter_ref, "")
-                    self.store.set_description(iter_ref, "")    
+                    self.store.set_description(iter_ref, "")
+                    self.store.set_bom(iter_ref, True)
+                    self.store.set_pos(iter_ref, True)
+                    self.store.set_stock(iter_ref, 0)
+                    self.store.set_stock_id(iter_ref, 0)   
         self.populate_footprint_list()
 
     def select_alike(self, e):
@@ -877,9 +914,10 @@ class NextPCBTools(wx.Dialog):
             if not mpn:
                 return
             else:
-                ref = self.footprint_list.GetTextValue(row, 1).split(",")
+                ref = self.footprint_list.GetTextValue(row, 1).split(",")[0]
+                #wx.MessageBox(f"ref:{ref}", "Help", style=wx.ICON_INFORMATION)
                 stock_id = self.store.get_stock_id(ref)
-                wx.MessageBox(f"stockID:{stock_id}", "Help", style=wx.ICON_INFORMATION)
+                #wx.MessageBox(f"stockID:{stock_id}", "Help", style=wx.ICON_INFORMATION)
                 self.show_part_details_dialog(stock_id)
 
     def get_column_by_name(self, column_title_to_find):
@@ -918,7 +956,8 @@ class NextPCBTools(wx.Dialog):
         if stockID != "":
             wx.BeginBusyCursor()
             try:
-                dialog = PartDetailsDialog(self.parent, int(stockID))
+                #wx.MessageBox(f"stockID:{stockID}", "Help", style=wx.ICON_INFORMATION)
+                dialog = PartDetailsDialog(self, int(stockID))
                 dialog.ShowModal()
             finally:
                 wx.EndBusyCursor()
@@ -996,6 +1035,7 @@ class NextPCBTools(wx.Dialog):
             if row == -1:
                 return
             part = self.footprint_list.GetTextValue(row, 4)
+
             if part != "":
                 if wx.TheClipboard.Open():
                     wx.TheClipboard.SetData(wx.TextDataObject(part))

@@ -493,7 +493,8 @@ class PartSelectorDialog(wx.Dialog):
             "stockNumber"
         ]
         self.item_list = []
-        for part_info in self.search_part_list:
+        #wx.MessageBox(f"self.search_part_list_json{self.search_part_list}", "Help", style=wx.ICON_INFORMATION)
+        for idx, part_info in enumerate(self.search_part_list, start=1):
             # if idx > 50 :
                 # break
             part = []
@@ -515,16 +516,19 @@ class PartSelectorDialog(wx.Dialog):
             part.insert(4, str(min_price))
             part.insert(6, "")
             #wx.MessageBox(f"part:{part}", "Help", style=wx.ICON_INFORMATION)
-            self.item_list.append(part)
+            #self.item_list.append(part)
+            part.insert(0, f'{idx}')
+            self.MPN_stockID_dict["".join(part[:4])] = part_info.get("stockId", 0)
+            self.part_list.AppendItem(part)
             #wx.MessageBox(f"parts:{parts}", "Help", style=wx.ICON_INFORMATION)
 
 
-        for idx, item in enumerate(self.item_list, start=1):
-            item.insert(0, f'{idx}')
-            self.MPN_stockID_dict["".join(item[:4])] = part_info.get("stockId", 0)
-        
-            self.part_list.AppendItem(item)
-        wx.MessageBox(f"dict:{self.MPN_stockID_dict}", "Help", style=wx.ICON_INFORMATION)
+        # for idx, item in enumerate(self.item_list, start=1):
+            # item.insert(0, f'{idx}')
+            # 
+        # 
+            # self.part_list.AppendItem(item)
+        #wx.MessageBox(f"dict:{self.MPN_stockID_dict}", "Help", style=wx.ICON_INFORMATION)
 
 
 
@@ -539,8 +543,8 @@ class PartSelectorDialog(wx.Dialog):
         des = self.part_list.GetValue(row, 3)
         key = str(row + 1) + selection + manu + des
         #wx.MessageBox(f"key:{key}", "Help", style=wx.ICON_INFORMATION)
-        wx.MessageBox(f"keyss:{list(self.parts.keys())}", "Help", style=wx.ICON_INFORMATION)
-        wx.MessageBox(f"stockID:{self.MPN_stockID_dict.get(key, 0)}", "Help", style=wx.ICON_INFORMATION)
+        #wx.MessageBox(f"keyss:{list(self.parts.keys())}", "Help", style=wx.ICON_INFORMATION)
+        #wx.MessageBox(f"stockID:{self.MPN_stockID_dict.get(key, 0)}", "Help", style=wx.ICON_INFORMATION)
         wx.PostEvent(
             self.parent,
             AssignPartsEvent(
@@ -565,6 +569,7 @@ class PartSelectorDialog(wx.Dialog):
         key = str(row + 1) + selection + manu + des
         # part = self.part_list.GetValue(row, 1)
         stock_id = self.MPN_stockID_dict.get(key, 0)
+        #wx.MessageBox(f"stock_id:{stock_id}", "Help", style=wx.ICON_INFORMATION)
         if stock_id != "":
             wx.BeginBusyCursor()
             try:

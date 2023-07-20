@@ -52,11 +52,11 @@ class Fabrication:
 
     def fill_zones(self):
         """Refill copper zones following user prompt."""
-        if self.parent.settings.get("gerber", {}).get("fill_zones", True):
-            filler = ZONE_FILLER(self.board)
-            zones = self.board.Zones()
-            filler.Fill(zones)
-            Refresh()
+        #if self.parent.settings.get("gerber", {}).get("fill_zones", True):
+        filler = ZONE_FILLER(self.board)
+        zones = self.board.Zones()
+        filler.Fill(zones)
+        Refresh()
 
     def fix_rotation(self, footprint):
         """Fix the rotation of footprints in order to be correct for JLCPCB."""
