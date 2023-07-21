@@ -9,6 +9,7 @@ import wx.adv as adv
 import wx.dataview
 import requests
 import webbrowser
+import threading
 from pcbnew import GetBoard, GetBuildVersion, ToMM
 
 from .events import (
@@ -320,7 +321,7 @@ class NextPCBTools(wx.Dialog):
         self.upper_toolbar.Realize()
 
         self.Bind(wx.EVT_COMBOBOX, self.group_parts, self.cb_group_strategy)
-        self.Bind(wx.EVT_BUTTON, self.auto_match_parts, self.auto_match_button)
+        self.Bind(wx.EVT_TOOL, self.auto_match_parts, self.auto_match_button)
         self.Bind(wx.EVT_BUTTON, self.generate_fabrication_data, self.generate_button)
         self.Bind(wx.EVT_BUTTON, self.generate_data_place_order, self.generate_place_order_button)
         self.Bind(wx.EVT_TOOL, self.manage_rotations, self.rotation_button)
@@ -552,18 +553,124 @@ class NextPCBTools(wx.Dialog):
         return parts
 
     def auto_match_parts(self, e):
-        #get all part from UI
-        
+        #get unmanaged part from UI
+        wx.MessageBox("slot", "Help", style=wx.ICON_INFORMATION)
+        unmanaged_parts = self.get_unmanaged_parts_from_list()
         #send request, parse rsp
+        self.upper_toolbar.EnableTool(ID_AUTO_MATCH, False)
+        #wx.MessageBox(f"unmanaged_parts:{unmanaged_parts}", "Help", style=wx.ICON_INFORMATION)
+        #for part in unmanaged_parts:  
+        unmanaged_parts = unmanaged_parts[:2]
+        threading.Thread(target=self.bom_match_api_request(unmanaged_parts)).start()
+        
 
+    def get_unmanaged_parts_from_list(self):
+        rows = []
+        parts = self.store.read_parts_by_group_value_footprint()
+        #wx.MessageBox(f"self.footprint_list.counts:{self.footprint_list.GetItemCount()}", "Help", style=wx.ICON_INFORMATION)
+        for part in parts:
+            ref = part[0]
+            val = part[1]
+            fp = part[2]
+            mpn = part[3]
+            if not mpn:
+                row = [ref, val, fp]
+                rows.append(row)
+        return rows
+
+    def bom_match_api_request(self, unmanaged_parts):
+        wx.CallAfter(wx.BeginBusyCursor)
+        #wx.CallAfter(wx.MessageBox(f"unmanaged_parts:{unmanaged_parts}", "Help", style=wx.ICON_INFORMATION))
+        headers = {
+            "Content-Type": "application/json",
+            "number": 1,
+            "system": "hqchip",
+            "vendor": "hqchip",
+            "type": 2,
+            "loss": 1,
+            "match_model": 2,
+            "search_order": "goods_name",
+            "service_type": 3
+        }
+
+        data = {
+            "type": ["localtion", "goods_other_name", "encap"],
+            "list": unmanaged_parts
+        }
+        wx.MessageBox(f"data:{data}", "Help", style=wx.ICON_INFORMATION)
+        params_json = json.dumps(headers, indent=None, ensure_ascii=False)
+        body_json = json.dumps(data, indent=None, ensure_ascii=False)
+
+        wx.MessageBox(f"body_json:{body_json}", "Help", style=wx.ICON_INFORMATION)
+        response = requests.post(
+            "https://uat-bomservice.hqchip.com/v3/match",
+            headers=params_json,
+            data=body_json
+        )
+        wx.MessageBox(f"response.status_code:{response.status_code}", "Help", style=wx.ICON_INFORMATION)
+        if response.status_code != 200:
+            wx.MessageBox(
+                f"non-OK HTTP response.status code:{response.status_code}", 
+                "Error",
+                style=wx.ICON_ERROR
+            )
+            return
+        
+        data = response.json()
+        wx.MessageBox(f"response.json():{data}", "Help", style=wx.ICON_INFORMATION)
+
+        if data.get("info") != "SUCCESS":
+            wx.MessageBox(
+                "returned match result is not SUCCESS", 
+                "Error",
+                style=wx.ICON_ERROR
+            )
+            return
+        
+        if not data.get("data", {}).get("match", {}):
+            wx.MessageBox(
+                "returned JSON data does not have expected 'match' attribute", 
+                "Error",
+                style=wx.ICON_ERROR
+            )
+            return
+        match_parts = data.get("data", {}).get("match", {})
+        if not match_parts:
+            return
+        key_params = [
+            "ModelName",
+            "BrandName",
+            "Desc",
+            "GoodsId"
+        ]
+        self.matched_list = []
+        for part_info in match_parts.values():
+            temp_list = []
+            temp_dict = {}
+            for k in key_params:
+                temp_list.append(part_info.get("match", {}).get(k, ""))
+            
+            temp_dict[part_info.get("0")] = temp_list
+            self.matched_list.append(temp_dict)
+        
+        wx.CallAfter(wx.EndBusyCursor)
         #update db
-
+        wx.CallAfter(self.update_db_after_match)
         #populate ui
+        wx.CallAfter(self.populate_footprint_list)
+        wx.CallAfter(self.upper_toolbar.EnableTool(ID_AUTO_MATCH, True))
 
-
-
-
-
+    def update_db_after_match(self):
+        if self.matched_list:
+            for i in self.matched_list:
+                #wx.MessageBox(f"references:{reference}", "Help", style=wx.ICON_INFORMATION)
+                references = self.matched_list[i].key()
+                partinfo_list = self.matched_list[i].get(references, [])
+                for reference in references.split(","):
+                    self.store.set_lcsc(reference, partinfo_list[0])
+                    self.store.set_manufacturer(reference, partinfo_list[1])
+                    self.store.set_description(reference, partinfo_list[2])
+                    self.store.set_stock_id(reference, partinfo_list[3])
 
     def generate_fabrication_data(self, e):
         """Generate fabrication data."""

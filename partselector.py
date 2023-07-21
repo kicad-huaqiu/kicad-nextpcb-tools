@@ -448,7 +448,7 @@ class PartSelectorDialog(wx.Dialog):
             self.report_part_search_error("non-OK HTTP response status")
             return
         data = response.json()
-        if not data.get("result"):
+        if not data.get("result", {}):
             self.report_part_search_error(
                 "returned JSON data does not have expected 'result' attribute"
             )
