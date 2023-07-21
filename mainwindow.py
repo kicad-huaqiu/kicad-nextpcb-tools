@@ -603,8 +603,8 @@ class NextPCBTools(wx.Dialog):
 
         wx.MessageBox(f"body_json:{body_json}", "Help", style=wx.ICON_INFORMATION)
         response = requests.post(
-            "https://uat-bomservice.hqchip.com/v3/match",
-            headers=params_json,
+            "https://uat-bomservice.hqchip.com/v3/match?type=2&system=hqchip&vendor=hqchip&search_order=goods_name&number=1&match_model=2&service_type=3",
+            #headers=params_json,
             data=body_json
         )
         wx.MessageBox(f"response.status_code:{response.status_code}", "Help", style=wx.ICON_INFORMATION)
