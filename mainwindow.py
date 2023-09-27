@@ -11,7 +11,7 @@ import requests
 import webbrowser
 import threading
 from pcbnew import GetBoard, GetBuildVersion, ToMM
-
+from .debug import Print
 from .events import (
     EVT_ASSIGN_PARTS_EVENT,
     EVT_MESSAGE_EVENT,
@@ -28,9 +28,6 @@ from .helpers import (
     get_footprint_by_ref,
     getVersion,
     loadBitmapScaled,
-    loadIconScaled,
-    toggle_exclude_from_bom,
-    toggle_exclude_from_pos,
 )
 from .library import Library, LibraryState
 from .partdetails import PartDetailsDialog
@@ -303,13 +300,13 @@ class NextPCBTools(wx.Dialog):
             #"Manage part rotations",
         )
 
-        self.mapping_button = self.upper_toolbar.AddTool(
-            ID_MAPPINGS,
-            "",
-            loadBitmapScaled("nextpcb-mapping.png", self.scale_factor),
-            "Mapping"
-            #"Import or export part mappings of footprint and MPN",
-        )
+        # self.mapping_button = self.upper_toolbar.AddTool(
+            # ID_MAPPINGS,
+            # "",
+            # loadBitmapScaled("nextpcb-mapping.png", self.scale_factor),
+            # "Mapping"
+            # "Import or export part mappings of footprint and MPN",
+        # )
 
         self.settings_button = self.upper_toolbar.AddTool(
             ID_SETTINGS,
@@ -325,7 +322,7 @@ class NextPCBTools(wx.Dialog):
         self.Bind(wx.EVT_BUTTON, self.generate_fabrication_data, self.generate_button)
         self.Bind(wx.EVT_BUTTON, self.generate_data_place_order, self.generate_place_order_button)
         self.Bind(wx.EVT_TOOL, self.manage_rotations, self.rotation_button)
-        self.Bind(wx.EVT_TOOL, self.manage_mappings, self.mapping_button)
+        #self.Bind(wx.EVT_TOOL, self.manage_mappings, self.mapping_button)
         #self.Bind(wx.EVT_TOOL, self.update_library, self.download_button)
         self.Bind(wx.EVT_TOOL, self.manage_settings, self.settings_button)
 
@@ -366,13 +363,13 @@ class NextPCBTools(wx.Dialog):
         self.down_toolbar.AddControl(self.remove_part_button)
         self.down_toolbar.AddSeparator()
 
-        self.save_all_button = wx.Button(
-            self.down_toolbar,
-            ID_SAVE_MAPPINGS,
-            " Save Mappings "
-        )
-        self.save_all_button.SetDefault()
-        self.down_toolbar.AddControl(self.save_all_button)
+        # self.save_all_button = wx.Button(
+            # self.down_toolbar,
+            # ID_SAVE_MAPPINGS,
+            # " Save Mappings "
+        # )
+        # self.save_all_button.SetDefault()
+        #self.down_toolbar.AddControl(self.save_all_button)
         self.down_toolbar.SetFocus()
         self.down_toolbar.AddStretchableSpace()
         
@@ -380,7 +377,7 @@ class NextPCBTools(wx.Dialog):
 
         self.Bind(wx.EVT_BUTTON, self.select_part, self.select_part_button)
         self.Bind(wx.EVT_BUTTON, self.remove_part, self.remove_part_button)
-        self.Bind(wx.EVT_BUTTON, self.save_all_mappings, self.save_all_button)
+        # self.Bind(wx.EVT_BUTTON, self.save_all_mappings, self.save_all_button)
         #self.Bind(wx.EVT_TOOL, self.export_to_schematic, self.export_schematic_button)
 
 
@@ -476,14 +473,15 @@ class NextPCBTools(wx.Dialog):
         self.enable_toolbar_buttons(False)
 
         self.init_logger()
-        self.init_library()
+        #self.init_library()
         self.on_notebook_page_changed(None)
         self.init_fabrication()
-        if self.library.state == LibraryState.UPDATE_NEEDED:
-            self.library.update()
-        else:
-            self.init_store()
-        self.library.create_mapping_table()
+        self.init_store()
+        # if self.library.state == LibraryState.UPDATE_NEEDED:
+            # self.library.update()
+        # else:
+            
+        #self.library.create_mapping_table()
 
 
     def on_notebook_page_changed(self, e):
@@ -503,8 +501,8 @@ class NextPCBTools(wx.Dialog):
             # self.footprint_list = FootPrintList(self.second_panel, self)
             # grid_sizer2.Add(self.footprint_list, 20, wx.ALL | wx.EXPAND, 5)
 
-        if self.library.state == LibraryState.INITIALIZED:
-            self.populate_footprint_list()  
+        # if self.library.state == LibraryState.INITIALIZED:
+        self.populate_footprint_list()  
             
 
     def quit_dialog(self, e):
@@ -519,8 +517,8 @@ class NextPCBTools(wx.Dialog):
     def init_store(self):
         """Initialize the store of part assignments"""
         self.store = Store(self, self.project_path)
-        if self.library.state == LibraryState.INITIALIZED:
-            self.populate_footprint_list()
+        #if self.library.state == LibraryState.INITIALIZED:
+        self.populate_footprint_list()
 
     def init_fabrication(self):
         """Initialize the fabrication"""
@@ -553,16 +551,39 @@ class NextPCBTools(wx.Dialog):
         return parts
 
     def auto_match_parts(self, e):
-        #get unmanaged part from UI
-        wx.MessageBox("slot", "Help", style=wx.ICON_INFORMATION)
-        unmanaged_parts = self.get_unmanaged_parts_from_list()
-        #send request, parse rsp
         self.upper_toolbar.EnableTool(ID_AUTO_MATCH, False)
-        #wx.MessageBox(f"unmanaged_parts:{unmanaged_parts}", "Help", style=wx.ICON_INFORMATION)
-        #for part in unmanaged_parts:  
-        unmanaged_parts = unmanaged_parts[:2]
-        threading.Thread(target=self.bom_match_api_request(unmanaged_parts)).start()
-        
+        try:
+            wx.BeginBusyCursor()
+            #get unmanaged part from UI
+            unmanaged_parts = self.get_unmanaged_parts_from_list()
+            #send request, parse rsp
+
+            #wx.MessageBox(f"unmanaged_parts:{unmanaged_parts}", "Help", style=wx.ICON_INFORMATION)
+            # start = 0
+            # batch_size = 5
+            # while start < len(unmanaged_parts):
+                # batch_parts = unmanaged_parts[start:start+batch_size]
+            # unmanaged_parts = unmanaged_parts[:10]
+                # 
+                # 
+                # 
+                # start += batch_size
+
+            thread = threading.Thread(target=self.bom_match_api_request(unmanaged_parts))
+            thread.start()
+            thread.join()
+            
+            self.update_db_after_match()
+
+            self.populate_footprint_list()
+            wx.MessageBox(
+                "Auto match finished.Some parts might match failed.\nYou can try it again or match by manual.", 
+                "Info",
+                style=wx.ICON_INFORMATION
+            )
+        finally:
+            wx.EndBusyCursor()
+            self.upper_toolbar.EnableTool(ID_AUTO_MATCH, True)
 
     def get_unmanaged_parts_from_list(self):
         rows = []
@@ -579,94 +600,113 @@ class NextPCBTools(wx.Dialog):
         return rows
 
     def bom_match_api_request(self, unmanaged_parts):
-        wx.CallAfter(wx.BeginBusyCursor)
-        #wx.CallAfter(wx.MessageBox(f"unmanaged_parts:{unmanaged_parts}", "Help", style=wx.ICON_INFORMATION))
-        headers = {
-            "Content-Type": "application/json",
-            "number": 1,
-            "system": "hqchip",
-            "vendor": "hqchip",
-            "type": 2,
-            "loss": 1,
-            "match_model": 2,
-            "search_order": "goods_name",
-            "service_type": 3
-        }
-
-        data = {
-            "type": ["localtion", "goods_other_name", "encap"],
-            "list": unmanaged_parts
-        }
-        wx.MessageBox(f"data:{data}", "Help", style=wx.ICON_INFORMATION)
-        params_json = json.dumps(headers, indent=None, ensure_ascii=False)
-        body_json = json.dumps(data, indent=None, ensure_ascii=False)
-
-        wx.MessageBox(f"body_json:{body_json}", "Help", style=wx.ICON_INFORMATION)
-        response = requests.post(
-            "https://uat-bomservice.hqchip.com/v3/match?type=2&system=hqchip&vendor=hqchip&search_order=goods_name&number=1&match_model=2&service_type=3",
-            #headers=params_json,
-            data=body_json
-        )
-        wx.MessageBox(f"response.status_code:{response.status_code}", "Help", style=wx.ICON_INFORMATION)
-        if response.status_code != 200:
-            wx.MessageBox(
-                f"non-OK HTTP response.status code:{response.status_code}", 
-                "Error",
-                style=wx.ICON_ERROR
-            )
-            return
         
-        data = response.json()
-        wx.MessageBox(f"response.json():{data}", "Help", style=wx.ICON_INFORMATION)
-
-        if data.get("info") != "SUCCESS":
-            wx.MessageBox(
-                "returned match result is not SUCCESS", 
-                "Error",
-                style=wx.ICON_ERROR
-            )
-            return
-        
-        if not data.get("data", {}).get("match", {}):
-            wx.MessageBox(
-                "returned JSON data does not have expected 'match' attribute", 
-                "Error",
-                style=wx.ICON_ERROR
-            )
-            return
-        match_parts = data.get("data", {}).get("match", {})
-        if not match_parts:
-            return
-        key_params = [
-            "ModelName",
-            "BrandName",
-            "Desc",
-            "GoodsId"
-        ]
+        start = 0
+        batch_size = 20
+        match_parts = {}
         self.matched_list = []
-        for part_info in match_parts.values():
-            temp_list = []
-            temp_dict = {}
-            for k in key_params:
-                temp_list.append(part_info.get("match", {}).get(k, ""))
-            
-            temp_dict[part_info.get("0")] = temp_list
-            self.matched_list.append(temp_dict)
-        
-        wx.CallAfter(wx.EndBusyCursor)
-        #update db
-        wx.CallAfter(self.update_db_after_match)
-        #populate ui
-        wx.CallAfter(self.populate_footprint_list)
-        wx.CallAfter(self.upper_toolbar.EnableTool(ID_AUTO_MATCH, True))
+        while start < len(unmanaged_parts):
+            #wx.MessageBox(f"len(unmanaged_parts):{len(unmanaged_parts)}", "Help", style=wx.ICON_INFORMATION)
+            batch_parts = unmanaged_parts[start:start+batch_size]
+            #wx.MessageBox(f"batch_parts:{batch_parts}", "Help", style=wx.ICON_INFORMATION)
+            #wx.MessageBox(f"before_start:{start}", "Help", style=wx.ICON_INFORMATION)
+            start += batch_size
+            #wx.MessageBox(f"after_start:{start}", "Help", style=wx.ICON_INFORMATION)
+            # data = {
+                # "Content-Type": "application/json",
+                # "number": 1,
+                # "system": "hqchip",
+                # "vendor": "hqchip",
+                # "type": 2,
+                # "loss": 1,
+                # "match_model": 2,
+                # "search_order": "goods_name",
+                # "service_type": 3,
+                # "type": ["localtion", "goods_other_name", "encap"],
+                # "list": batch_parts
+            # }
+            data = {
+                "type": 1,
+                "url": "/v3/match?number=1&system=hqchip&vendor=hqchip&loss=1&match_model=2&search_order=goods_name&service_type=3",
+                "params": {
+                    "type": ["localtion","goods_other_name","encap"],
+                    "list": batch_parts
+                }
+            }
+            body_json = json.dumps(data, indent=None, ensure_ascii=False)
+            #wx.MessageBox(f"body_json:{body_json}", "Help", style=wx.ICON_INFORMATION)
+            response = requests.post(
+                "https://edaapi.nextpcb.com/edapluginsapi/bom/v3/match/",
+                data=body_json
+            )
 
+            if response.status_code != 200:
+                wx.MessageBox(
+                    f"non-OK HTTP response.status code:{response.status_code}", 
+                    "Error",
+                    style=wx.ICON_ERROR
+                )
+                #wx.CallAfter(wx.EndBusyCursor)
+                continue
+            
+            rsp_data = response.json()
+            Print(self, str(rsp_data)).ShowModal()
+            #wx.MessageBox(f"response.json():{data}", "Help", style=wx.ICON_INFORMATION)
+            #wx.MessageBox(f"info:{rsp_data.get('info')}", "Help", style=wx.ICON_INFORMATION)
+            if rsp_data.get("info") != "SUCCESS":
+                # wx.MessageBox(
+                    # "Some parts match failed.Skip them and continue to match", 
+                    # "Info",
+                    # style=wx.ICON_INFORMATION
+                # )
+                #wx.CallAfter(wx.EndBusyCursor)
+                continue
+            
+            if not rsp_data.get("data", {}).get("match", {}):
+                #wx.CallAfter(wx.EndBusyCursor)
+                # unmatch
+                continue
+            match_parts = rsp_data.get("data", {}).get("match", {})
+            
+            key_params = [
+                "ModelName",
+                "BrandName",
+                "Desc",
+                "GoodsId"
+            ]
+
+            for part_info in match_parts.values():
+                #wx.MessageBox(f"part_info:{part_info}", "Help", style=wx.ICON_INFORMATION)
+                temp_list = []
+                temp_dict = {}
+                for k in key_params:
+                    temp_list.append(part_info.get("match", {}).get(k, ""))
+                    
+                #wx.MessageBox(f"temp_list:{temp_list}", "Help", style=wx.ICON_INFORMATION)
+                #wx.MessageBox(f"part_info.get('0'):{part_info.get('0')}", "Help", style=wx.ICON_INFORMATION)
+                temp_dict[part_info.get("0")] = temp_list
+                #wx.MessageBox(f"temp_dict:{temp_dict}", "Help", style=wx.ICON_INFORMATION)
+
+                self.matched_list.append(temp_dict)
+            #wx.MessageBox(f"self.matched_list:{self.matched_list}", "Help", style=wx.ICON_INFORMATION)
+
+            wx.CallAfter(self.update_db_after_match)
+            wx.CallAfter(self.populate_footprint_list)
+            #wx.CallAfter(wx.EndBusyCursor)
+        
     def update_db_after_match(self):
+        #wx.MessageBox(f"db_self.matched_list:{self.matched_list}", "Help", style=wx.ICON_INFORMATION)
         if self.matched_list:
             for i in self.matched_list:
-                #wx.MessageBox(f"references:{reference}", "Help", style=wx.ICON_INFORMATION)
-                references = self.matched_list[i].key()
-                partinfo_list = self.matched_list[i].get(references, [])
+                #wx.MessageBox(f"i:{i}", "Help", style=wx.ICON_INFORMATION)
+                references = list(i.keys())[0]
+                #wx.MessageBox(f"references:{references}", "Help", style=wx.ICON_INFORMATION)
+                partinfo_list = i.get(references, [])
+                
+                #wx.MessageBox(f"partinfo_list:{partinfo_list}", "Help", style=wx.ICON_INFORMATION)
                 for reference in references.split(","):
+                    #wx.MessageBox(f"reference:{reference}", "Help", style=wx.ICON_INFORMATION)
+                    #wx.MessageBox(f"partinfo_list[0]:{partinfo_list[0]}", "Help", style=wx.ICON_INFORMATION)
                     self.store.set_lcsc(reference, partinfo_list[0])
                     self.store.set_manufacturer(reference, partinfo_list[1])
                     self.store.set_description(reference, partinfo_list[2])
@@ -689,16 +729,13 @@ class NextPCBTools(wx.Dialog):
         self.fabrication.generate_cpl()
         #wx.MessageBox("CPL:", "Help", style=wx.ICON_INFORMATION)
         self.fabrication.generate_bom()
-        wx.MessageBox("BOM:", "Help", style=wx.ICON_INFORMATION)
+        #wx.MessageBox("BOM:", "Help", style=wx.ICON_INFORMATION)
 
 
     def generate_data_place_order(self, e):
         self.generate_fabrication_data(e)
         self.place_order_request()
         
-    def generate_nextpcb_json(self):
-        pass
-
 
     def place_order_request(self):
         zipname = f"GERBER-{self.fabrication.filename.split('.')[0]}.zip"
@@ -788,11 +825,12 @@ class NextPCBTools(wx.Dialog):
                 part[6] = 0 if '0' in part[6].split(",") else 1
                 part[7] = 0 if '0' in part[7].split(",") else 1
                 part[8] = ''
-                part[9] = "T/B" if ',' in part[9] else part[9]
+                part[9] = "T/B" if ('top' in part[9]) and ('bottom' in part[9]) else (part[9].split(','))[0]
             part[6] = toogles_dict.get(part[6], toogles_dict.get(1))
             part[7] = toogles_dict.get(part[7], toogles_dict.get(1))
             if ',' not in part[0]:
                 side = "top" if fp.GetLayer() == 0 else "bottom"
+                self.store.set_part_side(part[0], side)
                 part[9] = side
             part.insert(10, "")
             parts.append(part)
@@ -922,8 +960,8 @@ class NextPCBTools(wx.Dialog):
             ID_SELECT_SAME_PARTS,
             ID_PART_DETAILS,
             ID_TOGGLE_BOM,
-            ID_TOGGLE_POS,
-            ID_SAVE_MAPPINGS
+            ID_TOGGLE_POS
+            #ID_SAVE_MAPPINGS
         ):
             self.down_toolbar.EnableTool(button, state)
 
@@ -964,7 +1002,7 @@ class NextPCBTools(wx.Dialog):
     def toggle_pos(self, e):
         """Toggle the exclude from POS attribute of a footprint."""
         selected_rows = []
-        self.logger.debug("toggle pos")
+        #self.logger.debug("toggle pos")
         for item in self.footprint_list.GetSelections():
             row = self.footprint_list.ItemToRow(item)
             selected_rows.append(row)
@@ -982,16 +1020,17 @@ class NextPCBTools(wx.Dialog):
         for item in self.footprint_list.GetSelections():
             row = self.footprint_list.ItemToRow(item)
             ref = self.footprint_list.GetTextValue(row, 1)
-            for iter_ref in ref.split(","):
-                if iter_ref:
-                    #get_footprint_by_ref(GetBoard(), iter_ref)[0]
-                    self.store.set_lcsc(iter_ref, "")
-                    self.store.set_manufacturer(iter_ref, "")
-                    self.store.set_description(iter_ref, "")
-                    self.store.set_bom(iter_ref, True)
-                    self.store.set_pos(iter_ref, True)
-                    self.store.set_stock(iter_ref, 0)
-                    self.store.set_stock_id(iter_ref, 0)   
+            mpn = self.footprint_list.GetTextValue(row, 4)
+            if mpn:
+                for iter_ref in ref.split(","):
+                    if iter_ref:
+                        #get_footprint_by_ref(GetBoard(), iter_ref)[0]
+                        self.store.set_lcsc(iter_ref, "")
+                        self.store.set_manufacturer(iter_ref, "")
+                        self.store.set_description(iter_ref, "")
+                        self.store.set_bom(iter_ref, True)
+                        self.store.set_pos(iter_ref, True)
+                        self.store.set_stock_id(iter_ref, 0)   
         self.populate_footprint_list()
 
     def select_alike(self, e):
@@ -1015,17 +1054,17 @@ class NextPCBTools(wx.Dialog):
 
     def get_part_details(self, e):
         """Fetch part details from NextPCB and show them one after another each in a modal."""
-        for item in self.footprint_list.GetSelections():
-            row = self.footprint_list.ItemToRow(item)
-            mpn = self.footprint_list.GetTextValue(row, 4)
-            if not mpn:
-                return
-            else:
-                ref = self.footprint_list.GetTextValue(row, 1).split(",")[0]
-                #wx.MessageBox(f"ref:{ref}", "Help", style=wx.ICON_INFORMATION)
-                stock_id = self.store.get_stock_id(ref)
-                #wx.MessageBox(f"stockID:{stock_id}", "Help", style=wx.ICON_INFORMATION)
-                self.show_part_details_dialog(stock_id)
+        item = self.footprint_list.GetSelection()
+        row = self.footprint_list.ItemToRow(item)
+        mpn = self.footprint_list.GetTextValue(row, 4)
+        if not mpn:
+            return
+        else:
+            ref = self.footprint_list.GetTextValue(row, 1).split(",")[0]
+            #wx.MessageBox(f"ref:{ref}", "Help", style=wx.ICON_INFORMATION)
+            stock_id = self.store.get_stock_id(ref)
+            #wx.MessageBox(f"stockID:{stock_id}", "Help", style=wx.ICON_INFORMATION)
+            self.show_part_details_dialog(stock_id)
 
     def get_column_by_name(self, column_title_to_find):
         """Lookup a column in our main footprint table by matching its title"""
@@ -1061,11 +1100,11 @@ class NextPCBTools(wx.Dialog):
 
     def show_part_details_dialog(self, stockID):
         if stockID != "":
-            wx.BeginBusyCursor()
+            #wx.MessageBox(f"stockID:{stockID}", "Help", style=wx.ICON_INFORMATION)
             try:
+                wx.BeginBusyCursor()
                 #wx.MessageBox(f"stockID:{stockID}", "Help", style=wx.ICON_INFORMATION)
-                dialog = PartDetailsDialog(self, int(stockID))
-                dialog.ShowModal()
+                PartDetailsDialog(self, int(stockID)).ShowModal()
             finally:
                 wx.EndBusyCursor()
         else:
@@ -1133,35 +1172,62 @@ class NextPCBTools(wx.Dialog):
             Manufacturer = self.footprint_list.GetValue(row, 5)
             selection[reference] = MPN + "," + Manufacturer + "," + value + "," + fp
         # self.logger.debug(f"Create SQLite table for rotations, {selection}")
-        PartSelectorDialog(self, selection).ShowModal()
+        try:
+            wx.BeginBusyCursor()
+            PartSelectorDialog(self, selection).ShowModal()
+        finally:
+            wx.EndBusyCursor()
 
     def copy_part_lcsc(self, e):
         """Fetch part details from LCSC and show them in a modal."""
-        for item in self.footprint_list.GetSelections():
-            row = self.footprint_list.ItemToRow(item)
-            if row == -1:
-                return
-            part = self.footprint_list.GetTextValue(row, 4)
+        # wx.MessageBox("copyslot", "Help", style=wx.ICON_INFORMATION)
+        # if self.footprint_list.GetSelections() > 1:
+            # return
+        
+        item = self.footprint_list.GetSelection()
+        row = self.footprint_list.ItemToRow(item)
+        if row == -1:
+            return
+        part = ""
+        part += str(self.footprint_list.GetTextValue(row, 4)) + '\n'
+        part += str(self.footprint_list.GetTextValue(row, 5)) + '\n'
+        part += str(self.footprint_list.GetTextValue(row, 6)) + '\n'
+        ref = self.footprint_list.GetTextValue(row, 1).split(",")[0]
+        part += str(self.store.get_stock_id(ref))
 
-            if part != "":
-                if wx.TheClipboard.Open():
-                    wx.TheClipboard.SetData(wx.TextDataObject(part))
-                    wx.TheClipboard.Close()
+        #wx.MessageBox(f"copy text part:{part}", "Help", style=wx.ICON_INFORMATION)
+        
+        if part != "":
+            if wx.TheClipboard.Open():
+                wx.TheClipboard.SetData(wx.TextDataObject(part))
+                wx.TheClipboard.Close()
 
     def paste_part_lcsc(self, e):
+        #wx.MessageBox("copyslot", "Help", style=wx.ICON_INFORMATION)
         text_data = wx.TextDataObject()
         if wx.TheClipboard.Open():
             success = wx.TheClipboard.GetData(text_data)
             wx.TheClipboard.Close()
         if success:
-            lcsc = self.sanitize_lcsc(text_data.GetText())
-            if lcsc == "":
+            lines = text_data.GetText().split('\n')
+            #wx.MessageBox(f"lines:{lines}", "Help", style=wx.ICON_INFORMATION)
+            mpn = lines[0]
+            manufacturer = lines[1]
+            des = lines[2]
+            stock_id = lines[3]
+
+            if mpn == "":
                 return
-            for item in self.footprint_list.GetSelections():
-                row = self.footprint_list.ItemToRow(item)
-                reference = self.footprint_list.GetTextValue(row, 1)
-                self.store.set_lcsc(reference, lcsc)
-            self.populate_footprint_list()
+            item = self.footprint_list.GetSelection()
+            row = self.footprint_list.ItemToRow(item)
+            references = self.footprint_list.GetTextValue(row, 1)
+            for ref in references.split(","):
+                self.store.set_lcsc(ref, mpn)
+                self.store.set_manufacturer(ref, manufacturer)
+                self.store.set_description(ref, des)
+                self.store.set_stock_id(ref, stock_id)
+            
+        self.populate_footprint_list()
 
     def add_part_rot(self, e):
         for item in self.footprint_list.GetSelections():
@@ -1266,19 +1332,29 @@ class NextPCBTools(wx.Dialog):
         conMenu.Append(part_detail)
         conMenu.Bind(wx.EVT_MENU, self.get_part_details, part_detail)
 
-        item = self.footprint_list.GetSelection()
-        row = self.footprint_list.ItemToRow(item)
-        if row == -1:
-            return
-        mpn = self.footprint_list.GetTextValue(row, 4)
-        state = False if not mpn else True
-        
-        for menu_item in (
-            ID_COPY_MPN,
-            ID_REMOVE_PART,
-            ID_PART_DETAILS
-            ):
-            conMenu.Enable(menu_item, state)
+        item_count = len(self.footprint_list.GetSelections())
+        if item_count > 1:
+            for menu_item in (
+                ID_COPY_MPN,
+                ID_PASTE_MPN,
+                ID_MANUAL_MATCH,
+                ID_PART_DETAILS
+                ):
+                conMenu.Enable(menu_item, False)
+        else:
+            item = self.footprint_list.GetSelection()
+            row = self.footprint_list.ItemToRow(item)
+            if row == -1:
+                return
+            mpn = self.footprint_list.GetTextValue(row, 4)
+            state = False if not mpn else True
+            
+            for menu_item in (
+                ID_COPY_MPN,
+                ID_REMOVE_PART,
+                ID_PART_DETAILS
+                ):
+                conMenu.Enable(menu_item, state)
         self.footprint_list.PopupMenu(conMenu)
         conMenu.Destroy()  # destroy to avoid memory leak
 

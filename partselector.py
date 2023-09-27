@@ -7,6 +7,7 @@ import json
 from .events import AssignPartsEvent, UpdateSetting
 from .helpers import HighResWxSize, loadBitmapScaled
 from .partdetails import PartDetailsDialog
+from requests.exceptions import Timeout
 
 class PartSelectorDialog(wx.Dialog):
     def __init__(self, parent, parts):
@@ -111,22 +112,22 @@ class PartSelectorDialog(wx.Dialog):
         )
         self.package.SetHint("e.g. 0806")
 
-        self.assert_stock_checkbox = wx.CheckBox(
-            self,
-            wx.ID_ANY,
-            "In Stock",
-            wx.DefaultPosition,
-            HighResWxSize(parent.window, wx.Size(80, 30)),
-            0,
-            name="stock",
-        )
+        # self.assert_stock_checkbox = wx.CheckBox(
+            # self,
+            # wx.ID_ANY,
+            # "In Stock",
+            # wx.DefaultPosition,
+            # HighResWxSize(parent.window, wx.Size(80, 30)),
+            # 0,
+            # name="stock",
+        # )
 
-        self.assert_stock_checkbox.SetValue(
-            #True
-            self.parent.settings.get("partselector", {}).get("stock", True)
-        )
+        # self.assert_stock_checkbox.SetValue(
+            # True
+            # self.parent.settings.get("partselector", {}).get("stock", True)
+        # )
 
-        self.assert_stock_checkbox.Bind(wx.EVT_CHECKBOX, self.upadate_settings)
+        # self.assert_stock_checkbox.Bind(wx.EVT_CHECKBOX, self.upadate_settings)
 
         self.search_button = wx.Button(
             self,
@@ -191,12 +192,13 @@ class PartSelectorDialog(wx.Dialog):
         search_sizer.Add(search_sizer_two, 0, wx.RIGHT, 20)
         search_sizer.Add(search_sizer_three, 0, wx.RIGHT, 20)
         search_sizer.Add(search_sizer_four, 0, wx.RIGHT, 20)
-        search_sizer.Add(
-            self.assert_stock_checkbox,
-            0,
-            wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.ALIGN_CENTER_VERTICAL,
-            5,
-        )
+        search_sizer.AddStretchSpacer()
+        # search_sizer.Add(
+            # self.assert_stock_checkbox,
+            # 0,
+            # wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.ALIGN_CENTER_VERTICAL,
+            # 5,
+        # )
         search_sizer.Add(
             self.search_button,
             0,
@@ -292,10 +294,10 @@ class PartSelectorDialog(wx.Dialog):
             # flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
         # )
         self.part_list.AppendTextColumn(
-            "",
+            "Supplier",
             mode=wx.dataview.DATAVIEW_CELL_INERT,
-            width=int(parent.scale_factor * 10),
-            align=wx.ALIGN_CENTER,
+            width=int(parent.scale_factor * 50),
+            align=wx.ALIGN_LEFT,
             flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
         )
 
@@ -420,15 +422,19 @@ class PartSelectorDialog(wx.Dialog):
         self.page = 1    
         body = {
             "keyword": search_keyword,
-            "limit": 50,
+            "limit": 150,
             "page": self.page,
             "supplier": [],
             "supplierSort": []
         }
         
-        url = "https://uat-edaapi.nextpcb.com/edapluginsapi/v1/stock/search"
+        url = "https://edaapi.nextpcb.com/edapluginsapi/v1/stock/search"
         self.search_button.Disable()
-        threading.Thread(target=self.search_api_request(url, body)).start()
+        try:
+            threading.Thread(target=self.search_api_request(url, body)).start()
+        finally:
+            wx.EndBusyCursor()
+            self.search_button.Enable()
 
     def search_api_request(self, url, data):
         wx.CallAfter(wx.BeginBusyCursor)
@@ -438,11 +444,15 @@ class PartSelectorDialog(wx.Dialog):
         }
         body_json = json.dumps(data, indent=None, ensure_ascii=False)
         #wx.MessageBox(f"{body_json}", "Help", style=wx.ICON_INFORMATION)
-        response = requests.post(
-            url,
-            headers=headers,
-            data=body_json
-        )
+        try:
+            response = requests.post(
+                url,
+                headers=headers,
+                data=body_json,
+                timeout=10
+            )
+        except Timeout:
+            self.report_part_search_error("HTTP response timeout")
 
         if response.status_code != 200:
             self.report_part_search_error("non-OK HTTP response status")
@@ -462,7 +472,7 @@ class PartSelectorDialog(wx.Dialog):
         
         wx.CallAfter(self.populate_part_list)
         wx.CallAfter(wx.EndBusyCursor)
-        wx.CallAfter(self.search_button.Enable())
+        
 
   
     def update_subcategories(self, e):
@@ -514,7 +524,9 @@ class PartSelectorDialog(wx.Dialog):
                 min_price = 0
             #wx.MessageBox(f"min_price:{min_price}", "Help", style=wx.ICON_INFORMATION)
             part.insert(4, str(min_price))
-            part.insert(6, "")
+            suppliername = part_info.get("supplierName", "")
+            suppliername = "-" if suppliername == "" else suppliername
+            part.insert(6, suppliername)
             #wx.MessageBox(f"part:{part}", "Help", style=wx.ICON_INFORMATION)
             #self.item_list.append(part)
             part.insert(0, f'{idx}')
@@ -560,6 +572,7 @@ class PartSelectorDialog(wx.Dialog):
     def get_part_details(self, e):
         """Fetch part details from NextPCB API and show them in a modal."""
         item = self.part_list.GetSelection()
+        #wx.MessageBox(f"item:{item}", "Help", style=wx.ICON_INFORMATION)
         row = self.part_list.ItemToRow(item)
         if row == -1:
             return
@@ -569,14 +582,14 @@ class PartSelectorDialog(wx.Dialog):
         key = str(row + 1) + selection + manu + des
         # part = self.part_list.GetValue(row, 1)
         stock_id = self.MPN_stockID_dict.get(key, 0)
-        #wx.MessageBox(f"stock_id:{stock_id}", "Help", style=wx.ICON_INFORMATION)
+        
         if stock_id != "":
-            wx.BeginBusyCursor()
             try:
-                dialog = PartDetailsDialog(self.parent, int(stock_id))
-                dialog.ShowModal()
+                wx.BeginBusyCursor()
+                #wx.MessageBox(f"stock_id:{stock_id}", "Help", style=wx.ICON_INFORMATION)
+                PartDetailsDialog(self.parent, int(stock_id)).ShowModal()
             finally:
-                wx.EndBusyCursor()
+                 wx.EndBusyCursor()
         else:
             wx.MessageBox(
                 "Failed to get part stockID from NextPCB\r\n",
@@ -607,6 +620,6 @@ class PartSelectorDialog(wx.Dialog):
             "Error",
             style=wx.ICON_ERROR,
         )
-        #wx.CallAfter(wx.EndBusyCursor)
+        wx.CallAfter(wx.EndBusyCursor)
         wx.CallAfter(self.search_button.Enable())
         return
