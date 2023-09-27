@@ -52,11 +52,11 @@ class Fabrication:
 
     def fill_zones(self):
         """Refill copper zones following user prompt."""
-        #if self.parent.settings.get("gerber", {}).get("fill_zones", True):
-        filler = ZONE_FILLER(self.board)
-        zones = self.board.Zones()
-        filler.Fill(zones)
-        Refresh()
+        if self.parent.settings.get("gerber", {}).get("fill_zones", True):
+            filler = ZONE_FILLER(self.board)
+            zones = self.board.Zones()
+            filler.Fill(zones)
+            Refresh()
 
     def fix_rotation(self, footprint):
         """Fix the rotation of footprints in order to be correct for JLCPCB."""
@@ -262,7 +262,7 @@ class Fabrication:
     def generate_cpl(self):
         """Generate placement file (CPL)."""
         cplname = f"CPL-{self.filename.split('.')[0]}.csv"
-        self.corrections = self.parent.library.get_all_correction_data()
+        #self.corrections = self.parent.library.get_all_correction_data()
         aux_orgin = self.board.GetDesignSettings().GetAuxOrigin()
         with open(
             os.path.join(self.outputdir, cplname), "w", newline="", encoding="utf-8"
@@ -283,7 +283,8 @@ class Fabrication:
                             part[2],
                             ToMM(position.x),
                             ToMM(position.y) * -1,
-                            self.fix_rotation(fp),
+                            '',
+                            #self.fix_rotation(fp),
                             "top" if fp.GetLayer() == 0 else "bottom",
                         ]
                     )

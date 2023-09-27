@@ -12,7 +12,7 @@ class SettingsDialog(wx.Dialog):
             self,
             parent,
             id=wx.ID_ANY,
-            title="JLCPCB tools settings",
+            title="NextPCB tools settings",
             pos=wx.DefaultPosition,
             size=HighResWxSize(parent.window, wx.Size(1400, 800)),
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER | wx.MAXIMIZE_BOX,

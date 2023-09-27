@@ -137,18 +137,18 @@ class Store:
         """Create a part in the database."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
-                cur.execute("INSERT INTO part_info VALUES (?,?,?,?,?,?,?,?,?,?,?)", part)
+                cur.execute("INSERT INTO part_info VALUES (?,?,?,?,'','',?,?,'','',0)", part)
                 cur.commit()
 
     def update_part(self, part):
         """Update a part in the database, overwrite mpn if supplied."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
-                if len(part) == 11:
+                if len(part) == 6:
                     cur.execute(
-                        "UPDATE part_info set value = ?, footprint = ?, mpn = ?, manufacturer = ?, \
-                        description = ?, bomcheck = ?, poscheck = ?, rotation = ?, side = ?, stockid = ? WHERE reference = ?",
-                        part[1:] + part[0:1],
+                        "UPDATE part_info set value = ?, footprint = ?, mpn = '', manufacturer = '', \
+                        description = '', bomcheck = ?, poscheck = ?, rotation = '', side = '', stockid = 0 WHERE reference = ?",
+                        part[1:3] + part[4:] + part[0:1],
                     )
                 else:
                     cur.execute(
@@ -173,14 +173,14 @@ class Store:
                 cur.execute("DELETE FROM part_info WHERE reference=?", (ref,))
                 cur.commit()
 
-    def set_stock(self, ref, stock):
-        """Set the stock value for a part in the database."""
-        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
-            with con as cur:
-                cur.execute(
-                    f"UPDATE part_info SET stock = {int(stock)} WHERE reference = '{ref}'"
-                )
-                cur.commit()
+    # def set_stock(self, ref, stock):
+        # """Set the stock value for a part in the database."""
+        # with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            # with con as cur:
+                # cur.execute(
+                    # f"UPDATE part_info SET stock = {int(stock)} WHERE reference = '{ref}'"
+                # )
+                # cur.commit()
 
     def set_bom(self, ref, state):
         """Change the BOM attribute for a part in the database."""
@@ -206,6 +206,15 @@ class Store:
             with con as cur:
                 cur.execute(
                     f"UPDATE part_info SET mpn = '{value}' WHERE reference = '{ref}'"
+                )
+                cur.commit()
+
+    def set_part_side(self, ref, value):
+        """Change the BOM attribute for a part in the database."""
+        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            with con as cur:
+                cur.execute(
+                    f"UPDATE part_info SET side = '{value}' WHERE reference = '{ref}'"
                 )
                 cur.commit()
 
@@ -253,13 +262,8 @@ class Store:
                 fp.GetValue(),
                 str(fp.GetFPID().GetLibItemName()),
                 get_lcsc_value(fp),
-                '',
-                '',
                 int(not get_exclude_from_bom(fp)),
-                int(not get_exclude_from_pos(fp)),
-                '',
-                '',
-                0,
+                int(not get_exclude_from_pos(fp))
             ]
             dbpart = self.get_part(part[0])
             # if part is not in the database yet, create it
@@ -271,28 +275,29 @@ class Store:
             else:
                 #if the board part matches the dbpart except for the LCSC and the stock value,
                 if part[0:3] == list(dbpart[0:3]) and part[4:] == [
-                    bool(x) for x in dbpart[5:]
+                    bool(x) for x in dbpart[6:8]
                 ]:
                     #if part in the database, has no mpn value the board part has a mpn value, update including mpn
-                    if dbpart and not dbpart[3] and part[3]:
+                    if dbpart and not dbpart[3]:
                         self.logger.debug(
                             f"Part {part[0]} is already in the database but without mpn value, so the value supplied from the board will be set."
                         )
                         self.update_part(part)
                     #if part in the database, has a mpn value
-                    elif dbpart and dbpart[3] and part[3]:
+                    elif dbpart and dbpart[3]:
                         #update mpn value as well if setting is accordingly
-                        if not self.parent.settings.get("general", {}).get(
-                            "lcsc_priority", True
-                        ):
-                            self.logger.debug(
-                                f"Part {part[0]} is already in the database and has a mpn value, the value supplied from the board will be ignored."
-                            )
-                            part.pop(3)
-                        else:
-                            self.logger.debug(
-                                f"Part {part[0]} is already in the database and has a mpn value, the value supplied from the board will overwrite that in the database."
-                            )
+                        # if not self.parent.settings.get("general", {}).get(
+                            # "lcsc_priority", True
+                        # ):
+                            # self.logger.debug(
+                                # f"Part {part[0]} is already in the database and has a mpn value, the value supplied from the board will be ignored."
+                            #)
+                        part.pop(3)
+                        #else:
+                        self.logger.debug(
+                            #f"Part {part[0]} is already in the database and has a mpn value, the value supplied from the board will overwrite that in the database."
+                            f"Part {part[0]} is already in the database and has a mpn value, the value supplied from the board will be ignored."
+                        )
                         self.update_part(part)
                 else:
                     #If something changed, we overwrite the part and dump the mpn value or use the one supplied by the board
@@ -300,7 +305,7 @@ class Store:
                         f"Part {part[0]} is already in the database but value, footprint, bom or pos values changed in the board file, part will be updated, mpn overwritten/cleared."
                     )
                     self.update_part(part)
-        self.import_legacy_assignments()
+        #self.import_legacy_assignments()
         self.clean_database()
 
     def clean_database(self):
@@ -315,7 +320,7 @@ class Store:
 
     def import_legacy_assignments(self):
         """Check if assignments of an old version are found and merge them into the database."""
-        csv_file = os.path.join(self.project_path, "jlcpcb", "part_assignments.csv")
+        csv_file = os.path.join(self.project_path, "nextpcb", "part_assignments.csv")
         if os.path.isfile(csv_file):
             with open(csv_file) as f:
                 csvreader = csv.DictReader(

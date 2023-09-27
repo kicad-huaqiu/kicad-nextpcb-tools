@@ -13,7 +13,7 @@ class JLCPCBPlugin(ActionPlugin):
         )
         self.show_toolbar_button = True
         path, filename = os.path.split(os.path.abspath(__file__))
-        self.icon_file_name = os.path.join(path, "jlcpcb-icon.png")
+        self.icon_file_name = os.path.join(path, "nextPCB-icon.png")
         self._pcbnew_frame = None
 
     def Run(self):

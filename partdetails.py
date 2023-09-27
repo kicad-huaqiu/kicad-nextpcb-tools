@@ -4,9 +4,28 @@ import webbrowser
 import json
 import requests
 import wx
+from requests.exceptions import Timeout
 
 from .helpers import HighResWxSize, loadBitmapScaled
+from .debug import Print
 
+# class URLRenderer(wx.dataview.DataViewCustomRenderer):
+    # def __init__(self):
+        # super().__init__()
+# 
+    # def Render(self, rect, dc, state):
+        # self.SetBackgroundColour(wx.WHITE)
+        # dc.SetBrush(wx.WHITE_BRUSH)
+        # dc.SetTextForeground(wx.BLUE)
+# 
+        # item = self.GetDataObject()
+        # url = item.GetValue()
+# 
+        # dc.DrawText(url, rect.GetLeft(), rect.GetTop())
+# 
+    # def ActivateCell(self, cell, model, item):
+        # url = item.GetValue()  
+        # webbrowser.open(url)  
 
 class PartDetailsDialog(wx.Dialog):
     def __init__(self, parent, stockID):
@@ -112,18 +131,26 @@ class PartDetailsDialog(wx.Dialog):
 
     def quit_dialog(self, e):
         self.Destroy()
-        self.EndModal(0)
+        self.EndModal(wx.ID_OK)
 
-    def openpdf(self, e):
+    def on_open_pdf(self, e):
         """Open the linked datasheet PDF on button click."""
-        self.logger.info("opening %s", str(self.pdfurl))
-        webbrowser.open(self.pdfurl)
+        item = self.data_list.GetSelection()
+        row = self.data_list.ItemToRow(item)
+        Datasheet = self.data_list.GetTextValue(row, 0)
+        if self.pdfurl != "-" and Datasheet == "Datasheet":
+            self.logger.info("opening %s", str(self.pdfurl))
+            webbrowser.open("https:" + self.pdfurl)
 
     def get_scaled_bitmap(self, url, width, height):
         """Download a picture from a URL and convert it into a wx Bitmap"""
-        content = requests.get(url).content
+        header = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+            (KHTML, like Gecko) Chrome/99.0.9999.999 Safari/537.36'
+        }
+        content = requests.get(url,headers=header).content
         io_bytes = io.BytesIO(content)
-        image = wx.Image(io_bytes)
+        image = wx.Image(io_bytes, type=wx.BITMAP_TYPE_ANY)
         image = image.Scale(width, height, wx.IMAGE_QUALITY_HIGH)
         result = wx.Bitmap(image)
         return result
@@ -137,11 +164,20 @@ class PartDetailsDialog(wx.Dialog):
             "stockId": self.stockID
         }
         body_json = json.dumps(body, indent=None, ensure_ascii=False)
-        response = requests.post(
-            "https://uat-edaapi.nextpcb.com/edapluginsapi/v1/stock/detail",
-            headers=headers,
-            data=body_json
-        )
+        try:
+            response = requests.post(
+                "https://edaapi.nextpcb.com/edapluginsapi/v1/stock/detail",
+                headers=headers,
+                data=body_json,
+                timeout=5
+            )
+        except Timeout:
+            self.Destroy()
+            self.EndModal(wx.ID_OK)
+        except Exception as e:
+            self.Destroy()
+            self.EndModal(wx.ID_OK)
+
         if response.status_code != 200:
             self.report_part_data_fetch_error("non-OK HTTP response status")
 
@@ -201,12 +237,19 @@ class PartDetailsDialog(wx.Dialog):
                 self.pdfurl,
             ]
         )
-        picture = self.info.get("goodsImage", [])[0]
+        self.data_list.Bind(wx.dataview.EVT_DATAVIEW_ITEM_ACTIVATED, self.on_open_pdf)
+        
+        #renderer = URLRenderer()
+        #self.data_list.SetItemCustomRenderer(datasheet_item, 1, renderer)
+        picture = self.info.get("goodsImage", [])
         #wx.MessageBox(f"self.pdfurl{self.pdfurl}", "Help", style=wx.ICON_INFORMATION)
-        #wx.MessageBox(f"picture{picture}", "Help", style=wx.ICON_INFORMATION)
+        #wx.MessageBox(f"picture:{picture}", "Help", style=wx.ICON_INFORMATION)
         if picture:
-            # get the full resolution image instead of the thumbnail
-            picture = "https:" + picture
+            
+            picture = "https:" + picture[0]
+            #webbrowser.open(picture)
+            #Print(self, str(picture)).ShowModal()
+            
             self.image.SetBitmap(
                 self.get_scaled_bitmap(
                     picture,
@@ -215,6 +258,11 @@ class PartDetailsDialog(wx.Dialog):
                 )
             )
 
+    # def on_datasheet_pdf(self):
+        # item = self.data_list.GetSelection()
+        # row = self.data_list.ItemToRow(item)
+        # pdf_url = self.data_list.GetTextValue(row, 1)
+
     def report_part_data_fetch_error(self, reason):
         wx.MessageBox(
             f"Failed to download part detail from the NextPCB API ({reason})\r\n"
@@ -222,4 +270,6 @@ class PartDetailsDialog(wx.Dialog):
             "Error",
             style=wx.ICON_ERROR,
         )
-        self.EndModal(-1)
+        self.Destroy()
+        self.EndModal(wx.ID_OK)
+        #self.EndModal(-1)
