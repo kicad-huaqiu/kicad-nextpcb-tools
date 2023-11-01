@@ -4,7 +4,7 @@ from pcbnew import ActionPlugin
 from .mainwindow import NextPCBTools
 
 
-class JLCPCBPlugin(ActionPlugin):
+class NextPcbBomTool(ActionPlugin):
     def defaults(self):
         self.name = "JLCPCB Tools"
         self.category = "Fabrication data generation"
@@ -20,11 +20,3 @@ class JLCPCBPlugin(ActionPlugin):
         dialog = NextPCBTools(None)
         dialog.Center()
         dialog.Show()
-
-
-# def main():
-    # JLCPCBPlugin().Run()
-    # Plugin().register()
-
-# if __name__ == '__main__':
-    # main()

@@ -30,7 +30,6 @@ from .helpers import (
     loadBitmapScaled,
 )
 from .library import Library, LibraryState
-from .partdetails import PartDetailsDialog
 from .partmapper import PartMapperManagerDialog
 from .partselector import PartSelectorDialog
 from .rotations import RotationManagerDialog
@@ -1104,7 +1103,6 @@ class NextPCBTools(wx.Dialog):
             try:
                 wx.BeginBusyCursor()
                 #wx.MessageBox(f"stockID:{stockID}", "Help", style=wx.ICON_INFORMATION)
-                PartDetailsDialog(self, int(stockID)).ShowModal()
             finally:
                 wx.EndBusyCursor()
         else:

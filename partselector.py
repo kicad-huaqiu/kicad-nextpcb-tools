@@ -5,8 +5,8 @@ import threading
 import json
 from .events import AssignPartsEvent, UpdateSetting
 from .helpers import HighResWxSize, loadBitmapScaled
-from .partdetails import PartDetailsDialog
 from requests.exceptions import Timeout
+from view.ui_part_details_panel.part_details_view import PartDetailsView
 
 def ceil(x, y):
     return -(-x // y)
@@ -20,7 +20,7 @@ class PartSelectorDialog(wx.Dialog):
             id=wx.ID_ANY,
             title="NextPCB Search Online",
             pos=wx.DefaultPosition,
-            size=HighResWxSize(parent.window, wx.Size(1400, 800)),
+            size=HighResWxSize(parent.window, wx.Size(1200, 800)),
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER | wx.MAXIMIZE_BOX,
         )
 
@@ -34,6 +34,7 @@ class PartSelectorDialog(wx.Dialog):
 
         part_selection = self.get_existing_selection(parts)
         self.part_info = part_selection.split(",")
+        self.part_details_view = PartDetailsView(self)
         # ---------------------------------------------------------------------
         # ---------------------------- Hotkeys --------------------------------
         # ---------------------------------------------------------------------
@@ -78,7 +79,7 @@ class PartSelectorDialog(wx.Dialog):
             wx.ID_ANY,
             self.part_info[1],
             wx.DefaultPosition,
-            HighResWxSize(parent.window, wx.Size(300, 24)),
+            HighResWxSize(parent.window, wx.Size(200, 24)),
             wx.TE_PROCESS_ENTER,
         )
         self.manufacturer.SetHint("e.g. Vishay")
@@ -114,7 +115,6 @@ class PartSelectorDialog(wx.Dialog):
             wx.TE_PROCESS_ENTER,
         )
         self.package.SetHint("e.g. 0806")
-
         self.search_button = wx.Button(
             self,
             wx.ID_ANY,
@@ -274,14 +274,13 @@ class PartSelectorDialog(wx.Dialog):
             flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
         )
 
-        self.part_list.SetMinSize(HighResWxSize(parent.window, wx.Size(1050, 500)))
 
         self.part_list.Bind(
             wx.dataview.EVT_DATAVIEW_COLUMN_HEADER_CLICK, self.OnSortPartList
         )
 
         self.part_list.Bind(
-            wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED, self.OnPartSelected
+            wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED, self.on_part_selected
         )
 
         table_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -289,7 +288,7 @@ class PartSelectorDialog(wx.Dialog):
         table_sizer.Add(self.part_list, 20, wx.ALL | wx.EXPAND, 5)
 
         # ---------------------------------------------------------------------
-        # ------------------------Previous and Next page -------------------------
+        # ------------------------Previous and Next -------------------------
         # ---------------------------------------------------------------------
         self.previous_next_panel = wx.Panel(self)
         sizer = wx.BoxSizer(wx.HORIZONTAL )
@@ -302,13 +301,12 @@ class PartSelectorDialog(wx.Dialog):
         self.page_label = wx.StaticText(container, label="1/20", style=wx.ALIGN_CENTER)
         self.page_label.SetFont(font)
         container_sizer = wx.BoxSizer(wx.VERTICAL)
-        container_sizer.AddStretchSpacer(1)  
-        container_sizer.Add(self.page_label, 0, wx.ALIGN_CENTER) 
+        container_sizer.AddStretchSpacer(1) 
+        container_sizer.Add(self.page_label, 0, wx.ALIGN_CENTER)  
         container.SetSizer(container_sizer)
         sizer.Add(container, 0, wx.ALL, 5)
         next_button = wx.Button(self.previous_next_panel, label="Next",size=(70, 26))
         sizer.Add(next_button, 0, wx.ALL, 5)
-
         self.previous_next_panel.SetSizer(sizer)
         self.Layout()
 
@@ -329,17 +327,8 @@ class PartSelectorDialog(wx.Dialog):
             HighResWxSize(parent.window, wx.Size(120, 30)),
             0,
         )
-        self.part_details_button = wx.Button(
-            self,
-            wx.ID_ANY,
-            "Show part details",
-            wx.DefaultPosition,
-            HighResWxSize(parent.window, wx.Size(120, 30)),
-            0,
-        )
 
         self.select_part_button.Bind(wx.EVT_BUTTON, self.select_part)
-        self.part_details_button.Bind(wx.EVT_BUTTON, self.get_part_details)
 
         self.select_part_button.SetBitmap(
             loadBitmapScaled(
@@ -353,17 +342,26 @@ class PartSelectorDialog(wx.Dialog):
         tool_sizer.Add(self.previous_next_panel, 0, wx.ALL | wx.ALIGN_BOTTOM | wx.EXPAND, 5)
         tool_sizer.AddStretchSpacer()
         tool_sizer.Add(self.select_part_button, 0, wx.ALL | wx.ALIGN_BOTTOM | wx.EXPAND, 5)
-        tool_sizer.Add(self.part_details_button, 0, wx.ALL | wx.ALIGN_BOTTOM | wx.EXPAND, 5)
         table_sizer.Add(tool_sizer, 0, wx.EXPAND, 5)
 
         # ---------------------------------------------------------------------
         # ------------------------------ Sizers  ------------------------------
         # ---------------------------------------------------------------------
 
+
+
+        bSizer2 = wx.BoxSizer( wx.VERTICAL )
+        bSizer2.Add(result_sizer, 0, wx.LEFT | wx.EXPAND, 5)
+        bSizer2.Add(table_sizer, 20, wx.ALL | wx.EXPAND, 5)
+
+        bSizer1 = wx.BoxSizer( wx.HORIZONTAL )
+        bSizer1.Add( bSizer2, 15, wx.EXPAND |wx.ALL, 5 )
+        bSizer1.Add( self.part_details_view, 7, wx.EXPAND |wx.ALL, 0 )
+        
         layout = wx.BoxSizer(wx.VERTICAL)
         layout.Add(search_sizer, 0, wx.ALL | wx.EXPAND, 5)
-        layout.Add(result_sizer, 0, wx.LEFT | wx.EXPAND, 5)
-        layout.Add(table_sizer, 20, wx.ALL | wx.EXPAND, 5)
+        layout.Add( bSizer1, 1, wx.EXPAND, 5 )
+        
 
         self.SetSizer(layout)
         self.Layout()
@@ -396,18 +394,10 @@ class PartSelectorDialog(wx.Dialog):
         self.parent.library.set_order_by(e.GetColumn())
         self.search(None)
 
-    def OnPartSelected(self, e):
-        """Enable the toolbar buttons when a selection was made."""
-        if self.part_list.GetSelectedItemsCount() > 0:
-            self.enable_toolbar_buttons(True)
-        else:
-            self.enable_toolbar_buttons(False)
-
     def enable_toolbar_buttons(self, state):
         """Control the state of all the buttons in toolbar on the right side"""
         for b in [
             self.select_part_button,
-            self.part_details_button,
         ]:
             b.Enable(bool(state))
 
@@ -422,7 +412,6 @@ class PartSelectorDialog(wx.Dialog):
         ]:
             if word:
                 search_keyword += str(word + " ")
-                
         if self.current_page == 0:
             self.current_page = 1 
         body = {
@@ -433,12 +422,11 @@ class PartSelectorDialog(wx.Dialog):
             "supplierSort": []
         }
         
-        url = "https://edaapi.nextpcb.com/edapluginsapi/v1/stock/search"
+        url = "http://127.0.0.2:8080/edapluginsapi/v1/stock/search"
         self.search_button.Disable()
         try:
             threading.Thread(target=self.search_api_request(url, body)).start()
         finally:
-            wx.EndBusyCursor()
             self.search_button.Enable()
 
     def search_api_request(self, url, data):
@@ -490,13 +478,14 @@ class PartSelectorDialog(wx.Dialog):
             )
             self.subcategory.AppendItems(subcategories)
 
+
+    
     def populate_part_list(self):
         """Populate the list with the result of the search."""
         self.part_list.DeleteAllItems()
         self.MPN_stockID_dict.clear()
         if self.search_part_list is None:
             return
-        
         self.total_pages = ceil(self.total_num, 100)
         self.update_page_label()
         self.result_count.SetLabel(f"{self.total_num} Results")
@@ -544,20 +533,27 @@ class PartSelectorDialog(wx.Dialog):
         manu = self.part_list.GetValue(row, 2)
         des = self.part_list.GetValue(row, 3)
         key = str(row + 1) + selection + manu + des
-        wx.PostEvent(
-            self.parent,
-            AssignPartsEvent(
+        evt = AssignPartsEvent(
                 mpn=selection,
                 manufacturer=manu,
                 description=des,
                 references=list(self.parts.keys()),
-                stock_id=self.MPN_stockID_dict.get(key, 0)
-            ),
+                stock_id=self.MPN_stockID_dict.get(key, 0) )
+        wx.PostEvent(
+            self.parent,
+            evt
         )
         self.EndModal(wx.ID_OK)
 
-    def get_part_details(self, e):
-        """Fetch part details from NextPCB API and show them in a modal."""
+
+
+    def on_part_selected(self, e):
+        """Enable the toolbar buttons when a selection was made."""
+        if self.part_list.GetSelectedItemsCount() > 0:
+            self.enable_toolbar_buttons(True)
+        else:
+            self.enable_toolbar_buttons(False)
+        
         item = self.part_list.GetSelection()
         row = self.part_list.ItemToRow(item)
         if row == -1:
@@ -567,11 +563,11 @@ class PartSelectorDialog(wx.Dialog):
         des = self.part_list.GetValue(row, 3)
         key = str(row + 1) + selection + manu + des
         stock_id = self.MPN_stockID_dict.get(key, 0)
-        
+
         if stock_id != "":
             try:
                 wx.BeginBusyCursor()
-                PartDetailsDialog(self.parent, int(stock_id)).ShowModal()
+                self.part_details_view.get_part_data(stock_id)
             finally:
                  wx.EndBusyCursor()
         else:
@@ -580,6 +576,7 @@ class PartSelectorDialog(wx.Dialog):
                 "Error",
                 style=wx.ICON_ERROR,
             )
+
 
     def help(self, e):
         """Show message box with help instructions"""
