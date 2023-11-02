@@ -2,31 +2,35 @@ import wx
 import wx.xrc
 import wx.dataview
 import requests
-import json
 import webbrowser
 import io
-
+import json
 
 from .ui_part_details_panel import UiPartDetailsPanel
 import wx.dataview as dv
-from requests.exceptions import Timeout
 
 
 parameters = {
-    "goodsName": "MPN",
-    "providerName": "Manufacturer",
-    "goodsDesc": "Description",
-    "encap": "Package / Footprint",
-    "categoryName": "Category",
+    "mpn": "MPN",
+    "mfg": "Manufacturer",
+    "description": "Description",
+    "package": "Package / Footprint",
+    "category_orgn": "Category",
     "stockNumber": "Stock",
-    "minBuynum": "Minimum Order Quantity(MOQ)",
+}
+attribute_para={
+    "contact_plating",
+    "packaging",
+    "connector_type",
+    "contact_material",
+    "NextPCB Stair Price ($)",
+    "Datasheet"
 }
 
 class PartDetailsView(UiPartDetailsPanel):
     def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize, style=wx.TAB_TRAVERSAL, name=wx.EmptyString):
         super().__init__(parent, id=id, pos=pos, size=size, style=style, name=name)
 
-        
         # ---------------------------------------------------------------------
         # ----------------------- Properties List -----------------------------
         # ---------------------------------------------------------------------
@@ -39,9 +43,9 @@ class PartDetailsView(UiPartDetailsPanel):
 
         for k,v in parameters.items():
             self.data_list.AppendItem([v, " "])
-        self.data_list.AppendItem(
-            ["Datasheet", " "]
-        )
+        for v in attribute_para:
+            self.data_list.AppendItem([v, " "])    
+        
             
 
     def on_open_pdf(self, e):
@@ -58,51 +62,20 @@ class PartDetailsView(UiPartDetailsPanel):
         header = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.9999.999 Safari/537.36'
         }
-
         content = requests.get(url,headers=header).content
         io_bytes = io.BytesIO(content)
         image = wx.Image(io_bytes, type=wx.BITMAP_TYPE_ANY)
         result = wx.Bitmap(image)
         return result
 
-    def get_part_data(self,stockID):
+    def get_part_data(self,clicked_part):
         """fetch part data from NextPCB API and parse it into the table, set picture and PDF link"""
-        self.stockID =stockID
-        headers = {
-            "Content-Type": "application/json",
-        }
-        body = {
-            "stockId": self.stockID
-        }
-        body_json = json.dumps(body, indent=None, ensure_ascii=False)
-        try:
-            response = requests.post(
-                "https://edaapi.nextpcb.com/edapluginsapi/v1/stock/detail",
-                headers=headers,
-                data=body_json,
-                timeout=5
-            )
-        except Timeout:
-            self.Destroy()
-            self.EndModal(wx.ID_OK)
-        except Exception as e:
-            self.Destroy()
-            self.EndModal(wx.ID_OK)
-
-        if response.status_code != 200:
-            self.report_part_data_fetch_error("non-OK HTTP response status")
-
-        data = response.json()
-        if not data.get("result"):
+        if clicked_part == "":
             self.report_part_data_fetch_error(
-                "returned JSON data does not have expected 'result' attribute"
-            )
-        if not data.get("result").get("stock"):
-            self.report_part_data_fetch_error(
-                "returned JSON data does not have expected 'stock' attribute"
+                "returned data does not have expected clicked part"
             )
 
-        self.info = data.get("result").get("stock", {})
+        self.info = clicked_part
         for i in range(self.data_list.GetItemCount()):
             self.data_list.DeleteItem(0)
         for k, v in parameters.items():
@@ -111,6 +84,12 @@ class PartDetailsView(UiPartDetailsPanel):
                 self.data_list.AppendItem([v, str(val)])
             else:
                 self.data_list.AppendItem([v, "-"])
+        self.specs_dict  = json.loads(self.info.get("specs_orgn", []))
+        for k, v in self.specs_dict.items():
+            self.data_list.AppendItem([k, v])
+        
+        
+        # -------- prefect the following code,according to the interface ------      
         prices_stair = self.info.get("priceStair", [])
         if prices_stair:
             for price in prices_stair:
@@ -144,6 +123,7 @@ class PartDetailsView(UiPartDetailsPanel):
 
         picture = self.info.get("goodsImage", [])
         if picture:
+            
             picture = "https:" + picture[0]
             self.part_image.SetBitmap(
                 self.get_scaled_bitmap(
@@ -154,8 +134,8 @@ class PartDetailsView(UiPartDetailsPanel):
 
     def report_part_data_fetch_error(self, reason):
         wx.MessageBox(
-            f"Failed to download part detail from the NextPCB API ({reason})\r\n"
-            f"We looked for a part named:\r\n{self.stockID}\r\n[hint: did you fill in the NextPCB field correctly?]",
+            f"Failed to download part detail: ({reason})\r\n"
+            f"We looked for a part named:\r\n{self.info.find('mpn')}\r\n[hint: did you fill in the NextPCB field correctly?]",
             "Error",
             style=wx.ICON_ERROR,
         )

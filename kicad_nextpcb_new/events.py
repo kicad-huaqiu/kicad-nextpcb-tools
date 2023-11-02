@@ -6,3 +6,7 @@ MessageEvent, EVT_MESSAGE_EVENT = NewEvent()
 AssignPartsEvent, EVT_ASSIGN_PARTS_EVENT = NewEvent()
 PopulateFootprintListEvent, EVT_POPULATE_FOOTPRINT_LIST_EVENT = NewEvent()
 UpdateSetting, EVT_UPDATE_SETTING = NewEvent()
+
+
+# part selector
+UpdatePage, EVT_UPDATE_PAGE = NewEvent()

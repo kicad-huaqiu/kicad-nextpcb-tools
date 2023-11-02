@@ -21,7 +21,6 @@ class PartMapperManagerDialog(wx.Dialog):
 
         self.logger = logging.getLogger(__name__)
         self.parent = parent
-        # self.import_legacy_corrections()
 
         # ---------------------------------------------------------------------
         # ---------------------------- Hotkeys --------------------------------

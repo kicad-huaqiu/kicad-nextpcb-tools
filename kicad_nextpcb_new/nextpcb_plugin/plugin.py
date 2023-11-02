@@ -1,15 +1,14 @@
 import os
 from pcbnew import ActionPlugin
-
-from .mainwindow import NextPCBTools
+from kicad_nextpcb_new.nextpcb_plugin._main import _main
 
 
 class NextPcbBomTool(ActionPlugin):
     def defaults(self):
-        self.name = "JLCPCB Tools"
+        self.name = "NextPCB Tools"
         self.category = "Fabrication data generation"
         self.description = (
-            "Generate JLCPCB-compatible Gerber, Excellon, BOM and CPL files"
+            "Generate NextPCB-compatible Gerber, Excellon, BOM and CPL files"
         )
         self.show_toolbar_button = True
         path, filename = os.path.split(os.path.abspath(__file__))
@@ -17,6 +16,4 @@ class NextPcbBomTool(ActionPlugin):
         self._pcbnew_frame = None
 
     def Run(self):
-        dialog = NextPCBTools(None)
-        dialog.Center()
-        dialog.Show()
+        _main()
