@@ -37,11 +37,18 @@ class MatchPartView(UiMatchPartPanel):
         self.Bind(wx.EVT_BUTTON, self.generate_bom, self.export_csv)
         self.Bind(EVT_EXPORT_CSV, self.generate_bom)
 
-    def generate_bom(self,evt):
-        '''Generate the bom file.''' 
+    def temporary_variable(self,evt):
+        "Place temporary variable"
         self.BOARD_LOADED = evt.BOARD_LOADED
         self.project_path = evt.project_path 
         self.schematic_name = evt.board_name.split('.')[0]
+
+    def generate_bom(self,evt):
+        '''Generate the bom file.''' 
+        
+        self.project_path = evt.project_path 
+        self.schematic_name = evt.board_name.split('.')[0]
+        self.BOARD_LOADED = evt.BOARD_LOADED
 
         self.store = Store(self, self.project_path, self.BOARD_LOADED)
         self.parts = self.store.read_all()
@@ -57,7 +64,6 @@ class MatchPartView(UiMatchPartPanel):
                 for component in self.parts:
                     # writing data of CSV file
                     csv_writer.writerow(component)
-                wx.MessageBox(f"outfile:{outfile}", "Help", style=wx.ICON_INFORMATION)
 
 
 

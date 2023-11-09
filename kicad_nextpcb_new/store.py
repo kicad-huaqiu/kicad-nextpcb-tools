@@ -134,22 +134,22 @@ class Store:
         """Create a part in the database."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
-                cur.execute("INSERT INTO part_info VALUES (?,?,?,?,'','','',?,?,'','','' )", part)
+                cur.execute("INSERT INTO part_info VALUES (?,?,?,?,'','','',?,?,'',?,'' )", part)
                 cur.commit()
 
     def update_part(self, part):
         """Update a part in the database, overwrite mpn if supplied."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
-                if len(part) == 6:
+                if len(part) == 7:
                     cur.execute(
                         "UPDATE part_info set value = ?, footprint = ?,  mpn = '', manufacturer = '', \
-                        description = '',quantity = '', bomcheck = ?, poscheck = ?, rotation = '', side = '', part_detail = '' WHERE reference = ?",
+                        description = '',quantity = '', bomcheck = ?, poscheck = ?, rotation = '', side = ?, part_detail = '' WHERE reference = ?",
                         part[1:3] + part[4:] + part[0:1],
                     )
                 else:
                     cur.execute(
-                        "UPDATE part_info set value = ?, footprint = ?,quantity = '', bomcheck = ?, poscheck = ? WHERE reference = ?",
+                        "UPDATE part_info set value = ?, footprint = ?,quantity = '', bomcheck = ?, poscheck = ?, side = ? WHERE reference = ?",
                         part[1:] + part[0:1],
                     )
                 cur.commit()
@@ -253,7 +253,8 @@ class Store:
                 str(fp.GetFPID().GetLibItemName()),
                 get_lcsc_value(fp),
                 int(not get_exclude_from_bom(fp)),
-                int(not get_exclude_from_pos(fp))
+                int(not get_exclude_from_pos(fp)),
+                fp.GetLayer()
             ]
             dbpart = self.get_part(part[0])
             # if part is not in the database yet, create it
@@ -264,8 +265,8 @@ class Store:
                 self.create_part(part)
             else:
                 #if the board part matches the dbpart except for the LCSC and the stock value,
-                if part[0:2] == list(dbpart[0:2]) and part[4:] == [
-                    bool(x) for x in dbpart[7:9]
+                if part[0:2] == list(dbpart[0:2]) and part[4:5] == [
+                    bool(x) for x in dbpart[7:8]
                 ]:
                     #if part in the database, has no mpn value the board part has a mpn value, update including mpn
                     if dbpart and not dbpart[3]:
@@ -300,6 +301,26 @@ class Store:
                 )
                 cur.commit()
 
+    def clear_database(self):
+        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            with con as cur:
+                cur.execute(
+                    f"DELETE FROM part_info"
+                )
+                cur.commit()
+
+    def insert_mappings_data(self, Reference_data):
+        """Insert a mapping into the database."""
+        # self.references = Reference.split(',')
+        # for ref in self.references:
+        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            with con as cur:
+                cur.execute("INSERT INTO part_info VALUES (?,?,?,?,?,?,?,'','','','','' )", 
+                                Reference_data)
+                cur.commit()
+
+
+
     def import_legacy_assignments(self):
         """Check if assignments of an old version are found and merge them into the database."""
         csv_file = os.path.join(self.project_path, "nextpcb", "part_assignments.csv")
@@ -316,3 +337,4 @@ class Store:
                         f"Update {row['reference']} from legacy 'part_assignments.csv'"
                     )
             os.rename(csv_file, f"{csv_file}.backup")
+

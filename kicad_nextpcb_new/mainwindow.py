@@ -20,6 +20,7 @@ import logging
 import os
 import re
 import sys
+import csv
 
 import wx
 import wx.adv as adv
@@ -33,17 +34,16 @@ from .events import EVT_MESSAGE_EVENT,EVT_ASSIGN_PARTS_EVENT,EVT_POPULATE_FOOTPR
 from kicad_nextpcb_new.nextpcb_tools_view.ui_assigned_part_panel.assigned_part_view import AssignedPartView
 from kicad_nextpcb_new.nextpcb_tools_view.foot_print_list import FootPrintList
 from kicad_nextpcb_new.nextpcb_tools_view.ui_match_part_panel.match_part_view import MatchPartView
-from .button_id import ID_GROUP, ID_AUTO_MATCH, ID_GENERATE, ID_GENERATE_AND_PLACE_ORDER, ID_ROTATIONS, ID_MAPPINGS, ID_SETTINGS, ID_MANUAL_MATCH, ID_REMOVE_PART, ID_SELECT_SAME_PARTS, ID_PART_DETAILS, ID_TOGGLE_BOM, ID_TOGGLE_POS, ID_SAVE_MAPPINGS, ID_EXPORT
+from .button_id import (ID_GROUP, ID_AUTO_MATCH, ID_GENERATE, ID_GENERATE_AND_PLACE_ORDER, ID_ROTATIONS, 
+                        ID_MAPPINGS, ID_SETTINGS, ID_MANUAL_MATCH, ID_REMOVE_PART, ID_PART_DETAILS,ID_IMPORT_MAPPING,
+                        ID_COPY_MPN, ID_PASTE_MPN, ID_CONTEXT_MENU_ADD_ROT_BY_PACKAGE, ID_CONTEXT_MENU_ADD_ROT_BY_NAME,
+                        ID_SELECT_SAME_PARTS, ID_TOGGLE_BOM, ID_TOGGLE_POS, ID_SAVE_MAPPINGS, ID_EXPORT)
 from .board_manager import load_board_manager
+from kicad_nextpcb_new.import_BOM_view.import_BOM_dailog import ImportBOMDailog
 
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
-
-ID_COPY_MPN = wx.NewIdRef()
-ID_PASTE_MPN = wx.NewIdRef()
-ID_CONTEXT_MENU_ADD_ROT_BY_PACKAGE = wx.NewIdRef()
-ID_CONTEXT_MENU_ADD_ROT_BY_NAME = wx.NewIdRef()
 
 
 class NextPCBTools(wx.Dialog):
@@ -80,7 +80,6 @@ class NextPCBTools(wx.Dialog):
 
         self.assigned_part_view = AssignedPartView(self)
         self.match_part_view =   MatchPartView(self)
-        mainwindows = self
         
         # ---------------------------------------------------------------------
         # ---------------------------- events --------------------------------
@@ -149,11 +148,21 @@ class NextPCBTools(wx.Dialog):
         self.auto_match_button = self.upper_toolbar.AddTool(
             ID_AUTO_MATCH,
             "Auto Match ",
-            loadBitmapScaled("nextpcb-automatch.png", self.scale_factor),
+            loadBitmapScaled("nextpcb-automatch.png", 1.2),
             "Auto Match MPN number to parts",
         )
-
         self.upper_toolbar.AddStretchableSpace()
+
+
+        self.import_mapping_button = wx.Button(
+            self.upper_toolbar,
+            ID_IMPORT_MAPPING,
+            " Import BOM",
+            wx.DefaultPosition,
+            wx.DefaultSize,
+            0
+        )
+        self.upper_toolbar.AddControl(self.import_mapping_button)
 
         self.generate_button = wx.Button(
             self.upper_toolbar,
@@ -210,6 +219,8 @@ class NextPCBTools(wx.Dialog):
                   self.generate_place_order_button)
         self.Bind(wx.EVT_TOOL, self.manage_rotations, self.rotation_button)
         self.Bind(wx.EVT_TOOL, self.manage_settings, self.settings_button)
+        self.Bind(wx.EVT_BUTTON, self.import_mappings,
+                  self.import_mapping_button)
 
         # ---------------------------------------------------------------------
         # ------------------ down toolbar List --------------------------
@@ -248,26 +259,23 @@ class NextPCBTools(wx.Dialog):
         self.fplist_unmana = FootPrintList(self.second_panel, self)
         grid_sizer2.Add(self.fplist_unmana, 20, wx.ALL | wx.EXPAND, 5)
 
-        self.notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED,
-                           self.on_notebook_page_changed)
-
         table_sizer.Add(self.notebook, 20, wx.EXPAND | wx.ALL, 5)
-        table_sizer.Add(self.match_part_view, 0, wx.ALL | wx.EXPAND, 5)
+        table_sizer.Add(self.match_part_view, 0, wx.ALL | wx.EXPAND, 0)
 
 
-        self.Bind(
-            wx.dataview.EVT_DATAVIEW_COLUMN_HEADER_CLICK, mainwindows.OnSortFootprintList
+        self.notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED,self.on_notebook_page_changed)
+        self.notebook.Bind(
+            wx.dataview.EVT_DATAVIEW_COLUMN_HEADER_CLICK, self.OnSortFootprintList
         )
-        self.Bind(wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED,
-                  mainwindows.get_part_details)
-        self.Bind(wx.dataview.EVT_DATAVIEW_ITEM_ACTIVATED,
-                  mainwindows.get_part_details)
-        self.Bind(
-            wx.dataview.EVT_DATAVIEW_ITEM_CONTEXT_MENU, mainwindows.OnRightDown
+        self.notebook.Bind(wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED,
+                  self.get_part_details)
+        self.notebook.Bind(wx.dataview.EVT_DATAVIEW_ITEM_ACTIVATED,
+                  self.get_part_details)
+        self.notebook.Bind(
+            wx.dataview.EVT_DATAVIEW_ITEM_CONTEXT_MENU, self.OnRightDown
         )
-
-        self.Bind(wx.dataview.EVT_DATAVIEW_ITEM_VALUE_CHANGED,
-                  mainwindows.toggle_update_to_db)
+        self.notebook.Bind(wx.dataview.EVT_DATAVIEW_ITEM_VALUE_CHANGED,
+                  self.toggle_update_to_db)
 
         # ---------------------------------------------------------------------
         # --------------------- Bottom Logbox and Gauge -----------------------
@@ -295,8 +303,8 @@ class NextPCBTools(wx.Dialog):
         # self.gauge.SetMinSize(HighResWxSize(self.window, wx.Size(-1, 5)))
 
         self.assigned_part = wx.BoxSizer(wx.VERTICAL)
-        self.assigned_part.SetMinSize(wx.Size(-1,200))
-        self.assigned_part.Add(self.assigned_part_view, 1, wx.ALL | wx.EXPAND, 0)
+        self.assigned_part.SetMinSize(wx.Size(-1,220))
+        self.assigned_part.Add(self.assigned_part_view, 1, wx.EXPAND, 0)
 
         # ---------------------------------------------------------------------
         # ---------------------- Main Layout Sizer ----------------------------
@@ -306,8 +314,8 @@ class NextPCBTools(wx.Dialog):
             self.window, wx.Size(1000, -1)), wx.DefaultSize)
         layout = wx.BoxSizer(wx.VERTICAL)
         layout.Add(self.upper_toolbar, 0, wx.ALL | wx.EXPAND, 5)
-        layout.Add(table_sizer, 1, wx.ALL | wx.EXPAND, 5)
-        layout.Add( self.assigned_part, 0, wx.ALL | wx.EXPAND, 5)
+        layout.Add(table_sizer, 5, wx.ALL | wx.EXPAND, 5)
+        layout.Add( self.assigned_part, 2, wx.ALL | wx.EXPAND, 0)
         # layout.Add(self.logbox, 0, wx.ALL | wx.EXPAND, 5)
         # layout.Add(self.gauge, 0, wx.ALL | wx.EXPAND, 5)
 
@@ -380,8 +388,6 @@ class NextPCBTools(wx.Dialog):
             parts = self.store.read_all()
         elif self.group_strategy == 1:
             parts = self.store.read_parts_by_group_value_footprint()
-
-
         return parts
 
     def auto_match_parts(self, e):
@@ -563,7 +569,6 @@ class NextPCBTools(wx.Dialog):
         parts = []
         display_parts = self.get_display_parts()
         for part in display_parts:
-            fp = get_footprint_by_ref(self.BOARD_LOADED, (part[0].split(","))[0])[0]
             #---Get rid of hardcoded numbers and so on and replace them with macros or key-value pairs--
             if part[3] and part[3] not in numbers:
                 numbers.append(part[3])
@@ -579,8 +584,7 @@ class NextPCBTools(wx.Dialog):
             part[7] = toogles_dict.get(part[7], toogles_dict.get(1))
             part[8] = toogles_dict.get(part[8], toogles_dict.get(1))
             if ',' not in part[0]:
-                side = "top" if fp.GetLayer() == 0 else "bottom"
-                self.store.set_part_side(part[0], side)
+                side = "top" if part[10] == '0' else "bottom"
                 part[10] = side
             part.insert(11, "")
             parts.append(part)
@@ -829,33 +833,6 @@ class NextPCBTools(wx.Dialog):
                 self.store.set_part_detail(ref, part_detail)
         self.populate_footprint_list()
 
-    def add_part_rot(self, e):
-        for item in self.footprint_list.GetSelections():
-            row = self.footprint_list.ItemToRow(item)
-            if row == -1:
-                return
-            if e.GetId() == ID_CONTEXT_MENU_ADD_ROT_BY_PACKAGE:
-                package = self.footprint_list.GetTextValue(row, 2)
-                if package != "":
-                    RotationManagerDialog(
-                        self, "^" + re.escape(package)).ShowModal()
-            elif e.GetId() == ID_CONTEXT_MENU_ADD_ROT_BY_NAME:
-                name = self.footprint_list.GetTextValue(row, 1)
-                if name != "":
-                    RotationManagerDialog(self, re.escape(name)).ShowModal()
-
-    def save_all_mappings(self, e):
-        for r in range(self.footprint_list.GetItemCount()):
-            footp = self.footprint_list.GetTextValue(r, 2)
-            partval = self.footprint_list.GetTextValue(r, 1)
-            lcscpart = self.footprint_list.GetTextValue(r, 3)
-            if footp != "" and partval != "" and lcscpart != "":
-                if self.library.get_mapping_data(footp, partval):
-                    self.library.update_mapping_data(footp, partval, lcscpart)
-                else:
-                    self.library.insert_mapping_data(footp, partval, lcscpart)
-        self.logger.info("All mappings saved")
-
     def export_to_schematic(self, e):
         """Dialog to select schematics."""
         with wx.FileDialog(
@@ -870,35 +847,6 @@ class NextPCBTools(wx.Dialog):
                 return
             paths = openFileDialog.GetPaths()
             SchematicExport(self).load_schematic(paths)
-
-    def add_foot_mapping(self, e):
-        for item in self.footprint_list.GetSelections():
-            row = self.footprint_list.ItemToRow(item)
-            if row == -1:
-                return
-            footp = self.footprint_list.GetTextValue(row, 3)
-            partval = self.footprint_list.GetTextValue(row, 2)
-            lcscpart = self.footprint_list.GetTextValue(row, 4)
-            if footp != "" and partval != "" and lcscpart != "":
-                if self.library.get_mapping_data(footp, partval):
-                    self.library.update_mapping_data(footp, partval, lcscpart)
-                else:
-                    self.library.insert_mapping_data(footp, partval, lcscpart)
-
-    def search_foot_mapping(self, e):
-        for item in self.footprint_list.GetSelections():
-            row = self.footprint_list.ItemToRow(item)
-            if row == -1:
-                return
-            footp = self.footprint_list.GetTextValue(row, 3)
-            partval = self.footprint_list.GetTextValue(row, 2)
-            if footp != "" and partval != "":
-                if self.library.get_mapping_data(footp, partval):
-                    lcsc = self.library.get_mapping_data(footp, partval)[2]
-                    reference = self.footprint_list.GetTextValue(row, 0)
-                    self.store.set_lcsc(reference, lcsc)
-                    self.logger.info(f"Found {lcsc}")
-        self.populate_footprint_list()
 
     def sanitize_lcsc(self, lcsc_PN):
         m = re.search("C\\d+", lcsc_PN, re.IGNORECASE)
@@ -985,22 +933,79 @@ class NextPCBTools(wx.Dialog):
         root.addHandler(handler1)
         self.logger = logging.getLogger(__name__)
 
+    def import_mappings(self,e):
+        ImportBOMDailog(self).ShowModal()
+
+
+    # def import_mappings(self, e=None):
+    #     """Dialog to import mappings from a CSV file."""
+    #     with wx.FileDialog(
+    #         self,
+    #         "Import Mapping CSV",
+    #         "",
+    #         "",
+    #         "CSV files (*.csv)|*.csv",
+    #         wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+    #     ) as importFileDialog:
+    #         if importFileDialog.ShowModal() == wx.ID_CANCEL:
+    #             return
+    #         path = importFileDialog.GetPath()
+    #         self._import_mappings(path)
+
+    # def _import_mappings(self, path):
+    #     """mappings import logic"""
+    #     if os.path.isfile(path):
+    #         with open(path) as f:
+    #             csvreader = csv.DictReader(f, fieldnames=("Reference", "value", "Footprint",
+    #                                 "MPN", "Manufacturer","Description", "Quantity"))
+    #             next(csvreader)
+    #             References_list = []
+    #             self.store.clear_database()
+    #             for row in csvreader:
+    #                 References = row["Reference"].split(',')
+
+    #                 for ref in References:
+    #                     ref_data =[
+    #                         ref, row["value"], row["Footprint"],row["MPN"], 
+    #                        row["Manufacturer"], row["Description"], row["Quantity"]
+    #                     ]
+    #                     References_list.append(ref_data)
+                        
+    #             for ref_data in References_list:
+    #                 self.store.insert_mappings_data(ref_data)
+    #         self.insert_footprint_list()
+
+    # def insert_footprint_list(self, e=None):
+    #     """Populate/Refresh list of footprints."""
+    #     if not self.store:
+    #         self.init_store()
+    #     self.footprint_list.DeleteAllItems()
+    #     numbers = []
+    #     parts = []
+    #     # parts = self.store.read_parts_by_group_value_footprint()
+    #     display_parts = self.get_display_parts()
+    #     for part in display_parts:
+    #         #---Get rid of hardcoded numbers and so on and replace them with macros or key-value pairs--
+    #         if part[3] and part[3] not in numbers:
+    #             numbers.append(part[3])
+    #         if ',' in part[0]:
+    #             part[4] = (part[4].split(","))[0]
+    #             part[5] = (part[5].split(","))[0]
+    #             part[6] = part[6]
+    #             part[7] = ''
+    #             part[8] = ''
+    #             part[9] = ''
+    #             part[10] =''
+    #         part.insert(11, "")
+    #         parts.append(part)
+    #     for idx, part in enumerate(parts, start=1):
+    #         part.insert(0, f'{idx}')
+    #         part[7] = str(part[7])
+    #         if self.selected_page_index == 1 and part[4]:
+    #             continue
+    #         self.listsd= self.footprint_list.AppendItem(part)
+
     def __del__(self):
         pass
-
-
-class LogBoxHandler(logging.StreamHandler):
-    def __init__(self, textctrl):
-        logging.StreamHandler.__init__(self)
-        self.textctrl = textctrl
-
-    def emit(self, record):
-        """Pokemon exception that hopefully helps getting this working with threads."""
-        try:
-            msg = self.format(record)
-            self.textctrl.WriteText(msg + "\n")
-            self.flush()
-        except:
-            pass
 
 
