@@ -12,7 +12,7 @@ class PartListView(UiPartListPanel):
 
         self.part_list.AppendTextColumn(
             "index",
-            width=60, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_LEFT)
+            width=60, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
         self.part_list.AppendTextColumn(
             "MPN",
             width=150, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER

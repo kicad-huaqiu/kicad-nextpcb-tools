@@ -29,22 +29,19 @@ import requests
 import webbrowser
 import threading
 from pcbnew import  GetBuildVersion, ToMM
-from .events import EVT_MESSAGE_EVENT,EVT_ASSIGN_PARTS_EVENT,EVT_POPULATE_FOOTPRINT_LIST_EVENT,EVT_UPDATE_SETTING,ExportCSV
+from .events import EVT_MESSAGE_EVENT,EVT_ASSIGN_PARTS_EVENT,EVT_POPULATE_FOOTPRINT_LIST_EVENT,EVT_UPDATE_SETTING
 
 from kicad_nextpcb_new.nextpcb_tools_view.ui_assigned_part_panel.assigned_part_view import AssignedPartView
 from kicad_nextpcb_new.nextpcb_tools_view.foot_print_list import FootPrintList
 from kicad_nextpcb_new.nextpcb_tools_view.ui_match_part_panel.match_part_view import MatchPartView
 from .button_id import (ID_GROUP, ID_AUTO_MATCH, ID_GENERATE, ID_GENERATE_AND_PLACE_ORDER, ID_ROTATIONS, 
                         ID_MAPPINGS, ID_SETTINGS, ID_MANUAL_MATCH, ID_REMOVE_PART, ID_PART_DETAILS,ID_IMPORT_MAPPING,
-                        ID_COPY_MPN, ID_PASTE_MPN, ID_CONTEXT_MENU_ADD_ROT_BY_PACKAGE, ID_CONTEXT_MENU_ADD_ROT_BY_NAME,
-                        ID_SELECT_SAME_PARTS, ID_TOGGLE_BOM, ID_TOGGLE_POS, ID_SAVE_MAPPINGS, ID_EXPORT)
+                        ID_COPY_MPN, ID_PASTE_MPN, ID_CONTEXT_MENU_ADD_ROT_BY_PACKAGE, ID_CONTEXT_MENU_ADD_ROT_BY_NAME)
 from .board_manager import load_board_manager
 from kicad_nextpcb_new.import_BOM_view.import_BOM_dailog import ImportBOMDailog
 
-
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
-
 
 class NextPCBTools(wx.Dialog):
 
@@ -84,15 +81,16 @@ class NextPCBTools(wx.Dialog):
         # ---------------------------------------------------------------------
         # ---------------------------- events --------------------------------
         # ---------------------------------------------------------------------
-        evt=ExportCSV(
-           BOARD_LOADED = self.BOARD_LOADED,
-           project_path =  self.project_path,
-           board_name= self.board_name
-        )
-        wx.PostEvent(
-            self,
-            evt
-        )
+        self.bom = [{
+            'reference':'',
+            'value' :'',
+            'footprint':'',
+            'mpn' :'',
+            'manufacturer':'',
+            'description':'',
+            'quantity' :''
+         }]
+        self.Bind(wx.EVT_BUTTON, self.export_bom, self.match_part_view.export_csv)
         # ---------------------------------------------------------------------
         # ---------------------------- Hotkeys --------------------------------
         # ---------------------------------------------------------------------
@@ -360,8 +358,8 @@ class NextPCBTools(wx.Dialog):
     def init_store(self):
         """Initialize the store of part assignments"""
         self.store = Store(self, self.project_path, self.BOARD_LOADED)
-        # if self.library.state == LibraryState.INITIALIZED:
         self.populate_footprint_list()
+    
 
     def init_fabrication(self):
         """Initialize the fabrication"""
@@ -937,73 +935,24 @@ class NextPCBTools(wx.Dialog):
         ImportBOMDailog(self).ShowModal()
 
 
-    # def import_mappings(self, e=None):
-    #     """Dialog to import mappings from a CSV file."""
-    #     with wx.FileDialog(
-    #         self,
-    #         "Import Mapping CSV",
-    #         "",
-    #         "",
-    #         "CSV files (*.csv)|*.csv",
-    #         wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
-    #     ) as importFileDialog:
-    #         if importFileDialog.ShowModal() == wx.ID_CANCEL:
-    #             return
-    #         path = importFileDialog.GetPath()
-    #         self._import_mappings(path)
+    def export_bom(self,e):
+        '''Generate the bom file.''' 
+        self.schematic_name = self.board_name.split('.')[0]
+        self.parts = self.store.export_parts_by_group()
+        temp_dir = self.project_path
+        bomFileName = self.schematic_name+'.csv'
+        if len(self.bom) > 0:
+            with open((os.path.join(temp_dir, bomFileName)), 'w', newline='', encoding='utf-8-sig') as outfile:
+                csv_writer = csv.writer(outfile)
+                # writing headers of CSV file
+                csv_writer.writerow(self.bom[0].keys())
 
-    # def _import_mappings(self, path):
-    #     """mappings import logic"""
-    #     if os.path.isfile(path):
-    #         with open(path) as f:
-    #             csvreader = csv.DictReader(f, fieldnames=("Reference", "value", "Footprint",
-    #                                 "MPN", "Manufacturer","Description", "Quantity"))
-    #             next(csvreader)
-    #             References_list = []
-    #             self.store.clear_database()
-    #             for row in csvreader:
-    #                 References = row["Reference"].split(',')
+                # Output all of the component information
+                for component in self.parts:
+                    # writing data of CSV file
+                    csv_writer.writerow(component)
 
-    #                 for ref in References:
-    #                     ref_data =[
-    #                         ref, row["value"], row["Footprint"],row["MPN"], 
-    #                        row["Manufacturer"], row["Description"], row["Quantity"]
-    #                     ]
-    #                     References_list.append(ref_data)
-                        
-    #             for ref_data in References_list:
-    #                 self.store.insert_mappings_data(ref_data)
-    #         self.insert_footprint_list()
 
-    # def insert_footprint_list(self, e=None):
-    #     """Populate/Refresh list of footprints."""
-    #     if not self.store:
-    #         self.init_store()
-    #     self.footprint_list.DeleteAllItems()
-    #     numbers = []
-    #     parts = []
-    #     # parts = self.store.read_parts_by_group_value_footprint()
-    #     display_parts = self.get_display_parts()
-    #     for part in display_parts:
-    #         #---Get rid of hardcoded numbers and so on and replace them with macros or key-value pairs--
-    #         if part[3] and part[3] not in numbers:
-    #             numbers.append(part[3])
-    #         if ',' in part[0]:
-    #             part[4] = (part[4].split(","))[0]
-    #             part[5] = (part[5].split(","))[0]
-    #             part[6] = part[6]
-    #             part[7] = ''
-    #             part[8] = ''
-    #             part[9] = ''
-    #             part[10] =''
-    #         part.insert(11, "")
-    #         parts.append(part)
-    #     for idx, part in enumerate(parts, start=1):
-    #         part.insert(0, f'{idx}')
-    #         part[7] = str(part[7])
-    #         if self.selected_page_index == 1 and part[4]:
-    #             continue
-    #         self.listsd= self.footprint_list.AppendItem(part)
 
     def __del__(self):
         pass

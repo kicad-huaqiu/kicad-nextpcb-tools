@@ -371,3 +371,5 @@ class PartSelectorDialog(wx.Dialog):
         self.part_list_view.part_list.PopupMenu(conMenu)
         conMenu.Destroy()
     
+
+

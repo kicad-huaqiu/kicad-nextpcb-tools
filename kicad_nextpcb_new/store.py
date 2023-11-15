@@ -53,8 +53,8 @@ class Store:
             "value",
             "footprint",
             "mpn",
-            "bomcheck",
-            "poscheck",
+            "manufacturer",
+            "quantity",
         ]
         if self.order_by == order_by[n] and self.order_dir == "ASC":
             self.order_dir = "DESC"
@@ -100,13 +100,26 @@ class Store:
     def read_parts_by_group_value_footprint(self):
         """"""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            con.create_collation("naturalsort", natural_sort_collation)
             with con as cur:
-                query = "SELECT GROUP_CONCAT(reference), value, footprint, mpn, manufacturer, \
+                query = f"SELECT GROUP_CONCAT(reference), value, footprint, mpn, manufacturer, \
                 GROUP_CONCAT(description), COUNT(*) as quantity, GROUP_CONCAT(bomcheck), GROUP_CONCAT(poscheck), GROUP_CONCAT(rotation), \
-                GROUP_CONCAT(side) FROM part_info GROUP BY value, footprint, mpn, manufacturer"
+                GROUP_CONCAT(side) FROM part_info GROUP BY value, footprint, mpn, manufacturer \
+                ORDER BY {self.order_by} COLLATE naturalsort {self.order_dir}"
                 a = [list(part) for part in cur.execute(query).fetchall()]
                 return a
 
+    def export_parts_by_group(self):
+        """export BOM by group value、footprint"""
+        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            con.create_collation("naturalsort", natural_sort_collation)
+            with con as cur:
+                query = f"SELECT GROUP_CONCAT(reference), value, footprint, mpn, manufacturer, \
+                description, COUNT(*) as quantity FROM part_info \
+                GROUP BY value, footprint, mpn, manufacturer \
+                ORDER BY reference COLLATE naturalsort ASC "
+                a = [list(part) for part in cur.execute(query).fetchall()]
+                return a
 
     def read_bom_parts(self):
         """Read all parts that should be included in the BOM."""

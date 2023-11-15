@@ -8,14 +8,16 @@ import contextlib
 from kicad_nextpcb_new.helpers import (
     natural_sort_collation,
 )
+from kicad_nextpcb_new.board_manager import load_board_manager
 
 class ImportBOMStore:
 
     def __init__(self, parent):
         self.logger = logging.getLogger(__name__)
         self.parent = parent
-        # self.project_path = project_path
-        self.project_path ="C:\\Users\\ws\\Desktop\\kicad-nextpcb-tools"
+        self.BOARD_LOADED = load_board_manager()
+        self.project_path = os.path.split(self.BOARD_LOADED.GetFileName())[0]
+        # self.project_path ="C:\\Users\\ws\\Desktop\\kicad-nextpcb-tools"
         self.datadir = os.path.join(self.project_path, "nextpcb")
         self.dbfile = os.path.join(self.datadir, "importBOM.db")
         self.order_by = "reference"
@@ -55,6 +57,17 @@ class ImportBOMStore:
                     ).fetchall()
                 ]
 
+    def read_parts_by_group_value_footprint(self):
+        """read or export BOM by group value、footprint"""
+        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            con.create_collation("naturalsort", natural_sort_collation)
+            with con as cur:
+                query = f"SELECT GROUP_CONCAT(reference), value, footprint, mpn, manufacturer, \
+                description, COUNT(*) as quantity FROM import_BOM \
+                GROUP BY value, footprint, mpn, manufacturer \
+                ORDER BY {self.order_by} COLLATE naturalsort {self.order_dir}"
+                a = [list(part) for part in cur.execute(query).fetchall()]
+                return a
     
 
     def clear_database(self):

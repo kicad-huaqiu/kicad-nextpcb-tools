@@ -68,13 +68,10 @@ class ImportBOMDailog ( wx.Dialog ):
         self.Bind(wx.EVT_BUTTON, self.remove_part, self.import_list_view.remove_part_button)
         self.Bind(EVT_ASSIGN_PARTS_EVENT, self.assign_parts)
 
-
-
         # self.import_list_view.show_list.Bind(wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED,self.get_part_details)
         self.import_list_view.show_list.Bind(wx.dataview.EVT_DATAVIEW_ITEM_CONTEXT_MENU,self.on_right_down)
 
-
-        self.import_BOM_store.create_import_db()
+        # self.import_BOM_store.create_import_db()
 
     def quit_dialog(self, e):
         self.Destroy()
@@ -85,7 +82,7 @@ class ImportBOMDailog ( wx.Dialog ):
         """Populate the list with the import data result."""
         self.import_list_view.show_list.DeleteAllItems()
 
-        lists = self.import_BOM_store.read_all() 
+        lists = self.import_BOM_store.read_parts_by_group_value_footprint()
         if lists is None:
             self.logger.info("empty")
             return
@@ -153,7 +150,7 @@ class ImportBOMDailog ( wx.Dialog ):
             csvwriter = csv.writer(f, quotechar='"', quoting=csv.QUOTE_ALL)
             csvwriter.writerow(["Reference", "Value", "Footprint",
                                 "MPN","Manufacturer","Description","Quantity"])
-            for m in self.import_BOM_store.read_all():
+            for m in self.import_BOM_store.read_parts_by_group_value_footprint():
                 csvwriter.writerow([m[0], m[1], m[2],m[3], m[4], m[5],m[6]])
 
     def select_part(self, e):
@@ -220,35 +217,20 @@ class ImportBOMDailog ( wx.Dialog ):
     def on_right_down(self, e):
         """Right click context menu for action on parts table."""
         conMenu = wx.Menu()
-        # copy_lcsc = wx.MenuItem(conMenu, ID_COPY_MPN, "Copy MPN")
-        # conMenu.Append(copy_lcsc)
-        # conMenu.Bind(wx.EVT_MENU, self.copy_part_lcsc, copy_lcsc)
-
-        # paste_lcsc = wx.MenuItem(conMenu, ID_PASTE_MPN, "Paste MPN")
-        # conMenu.Append(paste_lcsc)
-        # conMenu.Bind(wx.EVT_MENU, self.paste_part_lcsc, paste_lcsc)
-
         manual_match = wx.MenuItem(
             conMenu, ID_MANUAL_MATCH, "Manual Match"
         )
         conMenu.Append(manual_match)
         conMenu.Bind(wx.EVT_MENU, self.select_part, manual_match)
-
         remove_mpn = wx.MenuItem(
             conMenu, ID_REMOVE_PART, "Remove Assigned MPN"
         )
         conMenu.Append(remove_mpn)
         conMenu.Bind(wx.EVT_MENU, self.remove_part, remove_mpn)
 
-
         item_count = len(self.import_list_view.show_list.GetSelections())
         if item_count > 1:
-            for menu_item in (
-                ID_COPY_MPN,
-                ID_PASTE_MPN,
-                ID_MANUAL_MATCH
-            ):
-                conMenu.Enable(menu_item, False)
+            conMenu.Enable(ID_MANUAL_MATCH, False)
         else:
             item = self.import_list_view.show_list.GetSelection()
             row = self.import_list_view.show_list.ItemToRow(item)
@@ -256,12 +238,7 @@ class ImportBOMDailog ( wx.Dialog ):
                 return
             mpn = self.import_list_view.show_list.GetTextValue(row, 4)
             state = False if not mpn else True
-
-            for menu_item in (
-                ID_COPY_MPN,
-                ID_REMOVE_PART
-            ):
-                conMenu.Enable(menu_item, state)
+            conMenu.Enable(ID_REMOVE_PART, state)
         self.import_list_view.show_list.PopupMenu(conMenu)
         # destroy to avoid memory leak
         conMenu.Destroy() 
