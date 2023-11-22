@@ -68,7 +68,7 @@ class ImportBOMDailog ( wx.Dialog ):
         self.Bind(wx.EVT_BUTTON, self.remove_part, self.import_list_view.remove_part_button)
         self.Bind(EVT_ASSIGN_PARTS_EVENT, self.assign_parts)
 
-        # self.import_list_view.show_list.Bind(wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED,self.get_part_details)
+        self.import_list_view.show_list.Bind(wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED,self.get_part_details)
         self.import_list_view.show_list.Bind(wx.dataview.EVT_DATAVIEW_ITEM_CONTEXT_MENU,self.on_right_down)
 
         # self.import_BOM_store.create_import_db()
@@ -109,9 +109,9 @@ class ImportBOMDailog ( wx.Dialog ):
     def _import_mappings(self, path):
         """mappings import logic"""
         if os.path.isfile(path):
-            with open(path) as f:
-                csvreader = csv.DictReader(f, fieldnames=("Reference", "value", "Footprint",
-                                    "MPN", "Manufacturer","Description", "Quantity"))
+            with open(path, encoding='gbk') as f:
+                csvreader = csv.DictReader(f, fieldnames=("Reference", "Value", "Footprint",
+                                    "MPN", "Manufacturer","Category","SKU", "Quantity"))
                 next(csvreader)
                 References_list = []
                 self.import_BOM_store.clear_database()
@@ -120,8 +120,8 @@ class ImportBOMDailog ( wx.Dialog ):
 
                     for ref in References:
                         ref_data =[
-                            ref, row["value"], row["Footprint"],row["MPN"], 
-                           row["Manufacturer"], row["Description"], row["Quantity"]
+                            ref, row["Value"], row["Footprint"],row["MPN"], 
+                           row["Manufacturer"], row["Category"], row["SKU"], row["Quantity"]
                         ]
                         References_list.append(ref_data)
                         
@@ -149,16 +149,17 @@ class ImportBOMDailog ( wx.Dialog ):
         with open(path, "w", newline="") as f:
             csvwriter = csv.writer(f, quotechar='"', quoting=csv.QUOTE_ALL)
             csvwriter.writerow(["Reference", "Value", "Footprint",
-                                "MPN","Manufacturer","Description","Quantity"])
+                                "MPN","Manufacturer","Category","SKU","Quantity"])
             for m in self.import_BOM_store.read_parts_by_group_value_footprint():
-                csvwriter.writerow([m[0], m[1], m[2],m[3], m[4], m[5],m[6]])
+                csvwriter.writerow([m[0], m[1], m[2],m[3], m[4], m[5],m[6],m[7]])
 
     def select_part(self, e):
         """Select a part from the library and assign it to the selected footprint(s)."""
         selection = {}
         for item in self.import_list_view.show_list.GetSelections():
             row = self.import_list_view.show_list.ItemToRow(item)
-            reference = (self.import_list_view.show_list.GetValue(row, 1).split(","))[0]
+            # reference = (self.import_list_view.show_list.GetValue(row, 1).split(","))[0]
+            reference = self.import_list_view.show_list.GetValue(row, 1)
             value = self.import_list_view.show_list.GetValue(row, 2)
             fp = self.import_list_view.show_list.GetValue(row, 3)
             MPN = self.import_list_view.show_list.GetValue(row, 4)
@@ -182,9 +183,10 @@ class ImportBOMDailog ( wx.Dialog ):
             if mpn:
                 for iter_ref in ref.split(","):
                     if iter_ref:
-                        self.import_BOM_store.set_reference(iter_ref, "")
+                        self.import_BOM_store.set_mpn(iter_ref, "")
                         self.import_BOM_store.set_manufacturer(iter_ref, "")
-                        self.import_BOM_store.set_description(iter_ref, "")
+                        self.import_BOM_store.set_category(iter_ref, "")
+                        self.import_BOM_store.set_sku(iter_ref, "")
                         self.import_BOM_store.set_part_detail(iter_ref, "")
         self.populate_import_list()
 
@@ -192,26 +194,28 @@ class ImportBOMDailog ( wx.Dialog ):
     def assign_parts(self, e):
         """Assign a selected nextPCB number to parts"""
         for reference in e.references:
-            self.import_BOM_store.set_reference(reference, e.mpn)
-            self.import_BOM_store.set_manufacturer(reference, e.manufacturer)
-            self.import_BOM_store.set_description(reference, e.description)
+            self.import_BOM_store.set_multi_mpn(reference, e.mpn)
+            self.import_BOM_store.set_multi_manufacturer(reference, e.manufacturer)
+            self.import_BOM_store.set_multi_category(reference, e.category)
+            self.import_BOM_store.set_multi_sku(reference, e.SKU)
             self.import_BOM_store.set_part_detail(reference, e.selected_part_detail)
         self.populate_import_list()
 
 
-    # def get_part_details(self, e):
-    #     """Fetch part details from NextPCB and show them one after another each in a modal."""
-    #     item = self.import_list_view.show_list.GetSelection()
-    #     row = self.import_list_view.show_list.ItemToRow(item)
-    #     mpn = self.import_list_view.show_list.GetTextValue(row, 4)
-    #     if not mpn:
-    #         return
-    #     else:
-    #         ref = self.import_list_view.show_list.GetTextValue(row, 1).split(",")[0]
-    #         part_detail_db = self.import_BOM_store.get_part_detail(ref)
-    #         self.part_detail_db = json.loads(part_detail_db)
-    #         self.assigned_part_view.get_part_data(self.part_detail_db)
-    #     e.Skip()
+    def get_part_details(self, e):
+        """Fetch part details from NextPCB and show them one after another each in a modal."""
+        item = self.import_list_view.show_list.GetSelection()
+        row = self.import_list_view.show_list.ItemToRow(item)
+        mpn = self.import_list_view.show_list.GetTextValue(row, 4)
+        if not mpn:
+            self.assigned_part_view.initialize_data()
+            return
+        else:
+            ref = self.import_list_view.show_list.GetTextValue(row, 1).split(",")[0]
+            part_detail_db = self.import_BOM_store.get_part_detail(ref)
+            self.part_detail_db = json.loads(part_detail_db)
+            self.assigned_part_view.get_part_data(self.part_detail_db)
+        e.Skip()
 
 
     def on_right_down(self, e):

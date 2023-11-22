@@ -12,19 +12,14 @@ import wx.dataview as dv
 
 parameters = {
     "mpn": "MPN",
-    "mfg": "Manufacturer",
-    "description": "Description",
+    "manufacturer": "Manufacturer",
     "package": "Package / Footprint",
-    "category_orgn": "Category",
-    "stockNumber": "Stock",
+    "category": "Category",
+    "part_desc": "Description",
 }
 attribute_para={
-    "contact_plating",
-    "packaging",
-    "connector_type",
-    "contact_material",
-    "NextPCB Stair Price ($)",
-    "Datasheet"
+    "sku":"SKU",
+    "quantity":"Stock",
 }
 
 class PartDetailsView(UiPartDetailsPanel):
@@ -43,10 +38,11 @@ class PartDetailsView(UiPartDetailsPanel):
 
         for k,v in parameters.items():
             self.data_list.AppendItem([v, " "])
-        for v in attribute_para:
-            self.data_list.AppendItem([v, " "])    
+        for k,v in attribute_para.items():
+            self.data_list.AppendItem([v, " "])   
+        self.data_list.AppendItem(["Price", " "])   
+        self.data_list.AppendItem(["Datasheet", " "])  
         
-            
 
     def on_open_pdf(self, e):
         """Open the linked datasheet PDF on button click."""
@@ -74,8 +70,9 @@ class PartDetailsView(UiPartDetailsPanel):
             self.report_part_data_fetch_error(
                 "returned data does not have expected clicked part"
             )
-
-        self.info = clicked_part
+        self.info = clicked_part.get("part_info",{})
+        self.supplier = clicked_part.get("supplier_chain",{})
+        
         for i in range(self.data_list.GetItemCount()):
             self.data_list.DeleteItem(0)
         for k, v in parameters.items():
@@ -84,33 +81,31 @@ class PartDetailsView(UiPartDetailsPanel):
                 self.data_list.AppendItem([v, str(val)])
             else:
                 self.data_list.AppendItem([v, "-"])
-        self.specs_dict  = json.loads(self.info.get("specs_orgn", []))
-        for k, v in self.specs_dict.items():
-            self.data_list.AppendItem([k, v])
-        
-        # -------- prefect the following code,according to the interface ------      
-        prices_stair = self.info.get("priceStair", [])
-        if prices_stair:
-            for price in prices_stair:
-                moq = price.get("purchase")
-                if moq < self.info.get("minBuynum"):
-                    continue
-                else:
-                    self.data_list.AppendItem(
-                        [
-                            f"NextPCB Stair Price ($) for >{moq}",
-                            str(price.get("hkPrice", "0")),
-                        ]
-                    )
-        else:
-            self.data_list.AppendItem(
-                [
-                    f"NextPCB Stair Price ($)",
-                    "0",
-                ]
-            )
 
-        self.pdfurl = self.info.get("docUrl", "-")
+        for k, v in attribute_para.items():
+            val = self.supplier.get(k, "-")
+            if val != "null" and val:
+                self.data_list.AppendItem([v, str(val)])
+            else:
+                self.data_list.AppendItem([v, "-"])
+        
+        prices_stair = self.supplier.get("price", [])
+        price_echelon = {}
+        # Populate price_echelon based on prices_stair data
+        for index, price_range in enumerate(prices_stair):
+            break_min = price_range.get("breakMin")
+            break_max = price_range.get("breakMax")
+            if break_max is None:
+                key = f">{break_min} Piece(￥)"
+            else:
+                key = f"{break_min}-{break_max} Piece(￥)"
+            price_echelon[key] = price_range["rmb"]             
+        # Populate self.data_list with the key-value pairs
+        for key, value in price_echelon.items():
+            self.data_list.AppendItem([key, str(value)])
+        
+        
+        self.pdfurl = self.info.get("datasheet", {})
         self.pdfurl = "-" if self.pdfurl == "" else self.pdfurl
         self.data_list.AppendItem(
             [
@@ -120,10 +115,9 @@ class PartDetailsView(UiPartDetailsPanel):
         )
         self.data_list.Bind(wx.dataview.EVT_DATAVIEW_ITEM_ACTIVATED, self.on_open_pdf)
 
-        picture = self.info.get("goodsImage", [])
+
+        picture = self.info.get("image", [])
         if picture:
-            
-            picture = "https:" + picture[0]
             self.part_image.SetBitmap(
                 self.get_scaled_bitmap(
                     picture,

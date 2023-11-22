@@ -62,7 +62,14 @@ class FootPrintList(wx.dataview.DataViewListCtrl):
             flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
         )
         self.stock = self.AppendTextColumn(
-            "Description",
+            "Category",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=int(mainwindows.scale_factor * 200),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.stock = self.AppendTextColumn(
+            "SKU",
             mode=wx.dataview.DATAVIEW_CELL_INERT,
             width=int(mainwindows.scale_factor * 200),
             align=wx.ALIGN_CENTER,
@@ -111,3 +118,4 @@ class FootPrintList(wx.dataview.DataViewListCtrl):
             align=wx.ALIGN_CENTER,
             flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
         )
+        

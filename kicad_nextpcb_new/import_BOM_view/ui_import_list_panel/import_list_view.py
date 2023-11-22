@@ -14,7 +14,7 @@ class ImportListView(UiImportListPanel):
 
         self.show_list.AppendTextColumn(
             "index",
-            width=60, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
+            width=50, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
         self.show_list.AppendTextColumn(
             "Reference",
             width=100, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
@@ -23,7 +23,7 @@ class ImportListView(UiImportListPanel):
             width=100, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
         self.show_list.AppendTextColumn(
             "Footprint",
-            width=250, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
+            width=180, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
         self.show_list.AppendTextColumn(
             "MPN",
             width=150, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
@@ -31,9 +31,12 @@ class ImportListView(UiImportListPanel):
             "Manufacturer",
             width=200, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
         self.show_list.AppendTextColumn(
-            "Description",
-            width=200, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
+            "Category",
+            width=150, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
+        self.show_list.AppendTextColumn(
+            "SKU",
+            width=150, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
         self.show_list.AppendTextColumn(
             "Quantity",
-            width=80, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
+            width=70, mode=dv.DATAVIEW_CELL_ACTIVATABLE, align=wx.ALIGN_CENTER)
 

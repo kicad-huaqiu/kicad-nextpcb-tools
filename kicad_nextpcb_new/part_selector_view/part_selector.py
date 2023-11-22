@@ -11,9 +11,14 @@ from requests.exceptions import Timeout
 from .ui_part_details_panel.part_details_view import PartDetailsView
 from .ui_search_panel.search_view import SearchView
 from .ui_part_list_panel.part_list_view import PartListView
-from kicad_nextpcb_new.library import Library
 
 ID_SELECT_PART = wx.NewIdRef()
+
+COLUM_INDEX = 0
+COLUM_SKU = 5
+COLUM_PRICE = 6
+COLUM_STOCK = 7
+
 
 def ceil(x, y):
     return -(-x // y)
@@ -30,12 +35,10 @@ class PartSelectorDialog(wx.Dialog):
             size=HighResWxSize(parent.window, wx.Size(1200, 800)),
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER | wx.MAXIMIZE_BOX,
         )
-        self.library = Library(self)
 
         self.logger = logging.getLogger(__name__)
         self.parent = parent
         self.parts = parts
-        self.MPN_stockID_dict = {}
 
         self.current_page = 0
         self.total_pages = 0
@@ -62,7 +65,7 @@ class PartSelectorDialog(wx.Dialog):
         # ---------------------------------------------------------------------
         # ---------------------------- bind events ----------------------------
         # ---------------------------------------------------------------------
-        self.search_view.description.SetValue(self.part_info[2])
+        self.search_view.description.SetValue(self.part_info[2]+' '+self.part_info[3]+' '+self.part_info[0])
         self.search_view.description.Bind(wx.EVT_SEARCHCTRL_SEARCH_BTN, self.search)
         self.search_view.mpn_textctrl.Bind(wx.EVT_TEXT_ENTER, self.search)
         self.search_view.manufacturer.Bind(wx.EVT_TEXT_ENTER, self.search)
@@ -130,7 +133,6 @@ class PartSelectorDialog(wx.Dialog):
 
     def OnSortPartList(self, e):
         """Set order_by to the clicked column and trigger list refresh."""
-        self.library.set_order_by(e.GetColumn())
         self.search(None)
 
     def enable_toolbar_buttons(self, state):
@@ -144,28 +146,35 @@ class PartSelectorDialog(wx.Dialog):
         """Search the library for parts that meet the search criteria."""
         if self.current_page == 0:
             self.current_page = 1 
+            
         if self.search_view.mpn_textctrl.GetValue()=="":
-            mpn = None
+            mpn = ""
         else:
             mpn = self.search_view.mpn_textctrl.GetValue()    
         if self.search_view.manufacturer.GetValue()=="":
-            mfg = None
+            manufacturer = ""
         else:
-            mfg = self.search_view.manufacturer.GetValue()
+            manufacturer = self.search_view.manufacturer.GetValue()
         if self.search_view.description.GetValue()=="":
-            comment = None
+            comment = ""
         else:
             comment = self.search_view.description.GetValue()
-        body = {'material': [ 
-                     mpn,                       # (1)mpn,
-                     mfg,                       # (2)mfg,
-                     None,                      # (3)package/footprint,
-                     None,                      # (4)ref,
-                     None,                      # (5)quantity,
-                     comment                    # (6)comment
-                     ]}
+            
+        body = [
+                {
+                    "line_no": "10",
+                    "mpn": mpn,
+                    "manufacturer": manufacturer,
+                    "package": "",
+                    "reference": "",
+                    "quantity": 0,
+                    "sku": "",
+                    "comment": comment
+                }
+               ]
+            
         
-        url = "http://192.168.50.100:5010/material_analyze"
+        url = "http://192.168.50.100:5010/bom_components_match"
         self.search_view.search_button.Disable()
         try:
             threading.Thread(target=self.search_api_request(url, body)).start()
@@ -185,8 +194,6 @@ class PartSelectorDialog(wx.Dialog):
                 json=data,
                 timeout=5
             )
-            print("json")
-            print(json)
         except Timeout:
             
             self.report_part_search_error("HTTP response timeout")
@@ -195,18 +202,19 @@ class PartSelectorDialog(wx.Dialog):
             self.report_part_search_error(f"non-OK HTTP response status：{response.status_code}")
             return
         self.search_part_list = []
-        data = response.json()
+        datas = response.json()
+        data =  datas[0].get("parts", {})
         self.total_num = len(data)
         if self.total_num == 0:
             self.current_page = 0 
         for item in data:
-            if not item.get("_source", {}):
+            if not item.get("part", {}):
                 self.report_part_search_error(
-                    "returned JSON data does not have expected '_source' attribute"
+                    "returned JSON data does not have expected 'part' attribute"
                 )
-            search_part = item.get("_source", {})
+            search_part = item.get("part", {})
             self.search_part_list.append(search_part)
-        
+        # self.populate_part_list(self)
         wx.CallAfter(self.populate_part_list)
         wx.CallAfter(wx.EndBusyCursor)
         
@@ -223,42 +231,71 @@ class PartSelectorDialog(wx.Dialog):
             self.part_list_view.result_count.SetLabel("1000 Results (limited)")
         else:
             self.part_list_view.result_count.SetLabel(f"{self.total_num} Results")
-
+        
+        
         parameters = [
             "mpn",
-            "mfg",
-            "description",
+            "manufacturer",
             "package",
-            "stockNumber"
+            "category"
         ] 
-        self.item_list = []
+        # but "item_total_list" contains more comprehensive data infomation.
+        self.item_total_list = []
         for idx, part_info in enumerate(self.search_part_list, start=1):
             part = []
             for k in parameters:
                 val = part_info.get(k, "")
                 val = "-" if val == "" else val
                 part.append(val)
+            part.insert(COLUM_INDEX, f'{idx}')
+            manu = part_info.get("manufacturer",{})
+            mpn = part_info.get("mpn",{})
+            supplier_chain ={}
+            headers = {
+                'Content-Type': 'application/json',
+                'accept':'application/json'
+            }
+            body = [
+                f"-{mpn}"
+                ]
+            url = "http://192.168.50.102:8012/search/supplychain/list/mfg-mpn"
+            json_data  = json.dumps(body, indent=None, ensure_ascii=False)
+            response = requests.post(
+                url,
+                headers=headers,
+                json=body,
+                # data=json_data,
+                timeout=5
+            )
+            if response.status_code != 200:
+                self.report_part_search_error(f"non-OK HTTP response status：{response.status_code}")
+            datas = response.json()
+            if(len(datas) == 0):
+                # self.part_list_view.prompt_info.AddMessage("No supplier parts information.")
+                self.part_list_view.prompt_info.ShowMessage( "No supplier parts information.",wx.ICON_INFORMATION)
+            supplier_chain =  datas[0]
             
-        
-            pricelist = part_info.get("priceStair", [])
-            if pricelist:
-                stair_num = len(pricelist)
-                min_price = (pricelist[stair_num - 1]).get("hkPrice", 0)
-            else:
-                min_price = 0            
+            
+            sku = supplier_chain.get("sku",{})
+            sku = "-" if sku == "" else sku
+            part.insert(5, sku)
+            price = supplier_chain.get("price",{})[0].get("rmb",{})
+            price = "-" if price == "" else price
+            part.insert(6, str(price))
+            stock = supplier_chain.get("quantity",{})
+            stock = "-" if stock == "" else stock
+            part.insert(7, str(stock))
 
-            pricelist = part_info.get("priceStair", [])
-            if pricelist:
-                stair_num = len(pricelist)
-                min_price = (pricelist[stair_num - 1]).get("hkPrice", 0)
-            else:
-                min_price = 0
-            part.insert(4, str(min_price))
-            suppliername = part_info.get("supplierName", "")
-            suppliername = "-" if suppliername == "" else suppliername
-            part.insert(6, suppliername)
-            part.insert(0, f'{idx}')
+            combined_data = {
+                "part_info": part_info,
+                "supplier_chain": supplier_chain
+            }
+
+            self.item_total_list.append(combined_data)
+
             self.part_list_view.part_list.AppendItem(part)
+
+
 
 
 
@@ -270,12 +307,14 @@ class PartSelectorDialog(wx.Dialog):
             return
         selection = self.part_list_view.part_list.GetValue(row, 1)
         manu = self.part_list_view.part_list.GetValue(row, 2)
-        des = self.part_list_view.part_list.GetValue(row, 3)
-        self.selected_part = self.search_part_list[row]
+        cate = self.part_list_view.part_list.GetValue(row, 4)
+        supplier = self.part_list_view.part_list.GetValue(row, 5)
+        self.selected_part = self.item_total_list[row]
         evt = AssignPartsEvent(
             mpn=selection,
             manufacturer=manu,
-            description=des,
+            category=cate,
+            SKU = supplier,
             references=list(self.parts.keys()),
             selected_part_detail = self.selected_part
         )
@@ -298,7 +337,8 @@ class PartSelectorDialog(wx.Dialog):
         row = self.part_list_view.part_list.ItemToRow(item)
         if row == -1:
             return
-        self.clicked_part = self.search_part_list[row]
+        self.clicked_part = self.item_total_list[row]
+        # self.clicked_part = self.search_part_list[row]
         if self.clicked_part != "":
             try:
                 wx.BeginBusyCursor()

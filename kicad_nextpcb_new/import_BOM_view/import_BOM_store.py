@@ -40,7 +40,7 @@ class ImportBOMStore:
             with con as cur:
                 cur.execute(
                     "CREATE TABLE IF NOT EXISTS import_BOM ('reference' ,'value',\
-                    'footprint','mpn', 'manufacturer', 'description', 'quantity','part_detail')"
+                    'footprint','mpn', 'manufacturer', 'category', 'SKU', 'quantity','part_detail')"
                 )
                 cur.commit()
 
@@ -52,7 +52,7 @@ class ImportBOMStore:
                 return [
                     list(part)
                     for part in cur.execute(
-                       f"SELECT reference, value, footprint,  mpn, manufacturer, description, 1 as quantity\
+                       f"SELECT reference, value, footprint,  mpn, manufacturer,  category, SKU, 1 as quantity\
                             FROM import_BOM ORDER BY {self.order_by} COLLATE naturalsort {self.order_dir}"
                     ).fetchall()
                 ]
@@ -63,7 +63,7 @@ class ImportBOMStore:
             con.create_collation("naturalsort", natural_sort_collation)
             with con as cur:
                 query = f"SELECT GROUP_CONCAT(reference), value, footprint, mpn, manufacturer, \
-                description, COUNT(*) as quantity FROM import_BOM \
+                category, SKU, COUNT(*) as quantity FROM import_BOM \
                 GROUP BY value, footprint, mpn, manufacturer \
                 ORDER BY {self.order_by} COLLATE naturalsort {self.order_dir}"
                 a = [list(part) for part in cur.execute(query).fetchall()]
@@ -83,12 +83,12 @@ class ImportBOMStore:
         """Insert to import data into the database."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
-                cur.execute("INSERT INTO import_BOM VALUES (?,?,?,?,?,?,?,'' )", 
+                cur.execute("INSERT INTO import_BOM VALUES (?,?,?,?,?,?,?,?,'' )", 
                                 Reference_data)
                 cur.commit()
 
 
-    def set_reference(self, ref, value):
+    def set_mpn(self, ref, value):
         """Change the BOM attribute for a part in the database."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
@@ -96,6 +96,7 @@ class ImportBOMStore:
                     f"UPDATE import_BOM SET mpn = '{value}' WHERE reference = '{ref}'"
                 )
                 cur.commit()    
+
 
     def set_manufacturer(self, ref, value):
         """Change the BOM attribute for a part in the database."""
@@ -106,22 +107,77 @@ class ImportBOMStore:
                 )
                 cur.commit()
 
-    def set_description(self, ref, value):
+    def set_category(self, ref, value):
         """Change the BOM attribute for a part in the database."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
                 cur.execute(
-                    f"UPDATE import_BOM SET description = '{value}' WHERE reference = '{ref}'"
+                    f"UPDATE import_BOM SET category = '{value}' WHERE reference = '{ref}'"
                 )
+                cur.commit()
+
+    def set_sku(self, ref, value):
+        """Change the BOM attribute for a part in the database."""
+        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            with con as cur:
+                cur.execute(
+                    f"UPDATE import_BOM SET SKU = '{value}' WHERE reference = '{ref}'"
+                )
+                cur.commit()
+
+    def set_multi_mpn(self, ref, value):
+        """Change the BOM attribute for a part in the database."""
+        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            with con as cur:
+                references = ref.split(',')
+                for reference in references:
+                    cur.execute(
+                        f"UPDATE import_BOM SET mpn = '{value}' WHERE reference = '{reference}'"
+                    )
+                cur.commit()    
+
+    def set_multi_manufacturer(self, ref, value):
+        """Change the BOM attribute for a part in the database."""
+        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            with con as cur:
+                references = ref.split(',')
+                for reference in references:
+                    cur.execute(
+                        f"UPDATE import_BOM SET manufacturer = '{value}' WHERE reference = '{reference}'"
+                    )
+                cur.commit()
+
+    def set_multi_category(self, ref, value):
+        """Change the BOM attribute for a part in the database."""
+        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            with con as cur:
+                references = ref.split(',')
+                for reference in references:
+                    cur.execute(
+                        f"UPDATE import_BOM SET category = '{value}' WHERE reference = '{reference}'"
+                    )
+                cur.commit()
+
+    def set_multi_sku(self, ref, value):
+        """Change the BOM attribute for a part in the database."""
+        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            with con as cur:
+                references = ref.split(',')
+                for reference in references:
+                    cur.execute(
+                        f"UPDATE import_BOM SET SKU = '{value}' WHERE reference = '{reference}'"
+                    )
                 cur.commit()
 
     def set_part_detail(self, ref, value):
         """Change the BOM attribute for a part in the database."""
         value = json.dumps(value)
+        reference = ref.split(',')[0]
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
                 cur.execute(
-                    f"UPDATE import_BOM SET part_detail = '{value}' WHERE reference = '{ref}'"
+                    "UPDATE import_BOM SET part_detail = ? WHERE reference = ?",
+                    (value, reference)
                 )
                 cur.commit()
 

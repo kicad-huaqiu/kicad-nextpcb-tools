@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ###########################################################################
-## Python code generated with wxFormBuilder (version 3.10.1-0-g8feb16b3)
+## Python code generated with wxFormBuilder (version 4.0.0-0-g0efcecf)
 ## http://www.wxformbuilder.org/
 ##
 ## PLEASE DO *NOT* EDIT THIS FILE!
@@ -22,10 +22,20 @@ class UiPartListPanel ( wx.Panel ):
 
 		bSizer2 = wx.BoxSizer( wx.VERTICAL )
 
+		bSizer4 = wx.BoxSizer( wx.HORIZONTAL )
+
 		self.result_count = wx.StaticText( self, wx.ID_ANY, u"0 Results", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.result_count.Wrap( -1 )
 
-		bSizer2.Add( self.result_count, 0, wx.LEFT, 5 )
+		bSizer4.Add( self.result_count, 0, wx.ALL|wx.LEFT, 5 )
+
+		self.prompt_info = wx.InfoBar( self )
+		self.prompt_info.SetShowHideEffects( wx.SHOW_EFFECT_NONE, wx.SHOW_EFFECT_NONE )
+		self.prompt_info.SetEffectDuration( 1 )
+		bSizer4.Add( self.prompt_info, 0, wx.EXPAND, 0 )
+
+
+		bSizer2.Add( bSizer4, 0, wx.EXPAND, 5 )
 
 		self.part_list = wx.dataview.DataViewListCtrl( self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, 0 )
 		bSizer2.Add( self.part_list, 1, wx.ALL|wx.EXPAND, 5 )
@@ -56,7 +66,7 @@ class UiPartListPanel ( wx.Panel ):
 
 		bSizer1.Add( ( 0, 0), 1, wx.EXPAND, 5 )
 
-		self.select_part_button = wx.Button( self, wx.ID_ANY, u"Select Part", wx.DefaultPosition, wx.Size( 120,40 ), 0 )
+		self.select_part_button = wx.Button( self, wx.ID_ANY, u"Select part", wx.DefaultPosition, wx.Size( 120,40 ), 0 )
 		bSizer1.Add( self.select_part_button, 0, wx.ALL, 5 )
 
 
