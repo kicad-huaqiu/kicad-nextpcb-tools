@@ -14,12 +14,13 @@ from .helpers import (
     get_valid_footprints,
     natural_sort_collation,
 )
+
 THRESHOLD = 6
 
 PART_REFERENCE = 0
 PART_VALUE = 1
 PART_FOOTPRINT = 2
-PART_MPN =3
+PART_MPN = 3
 PART_BOMCHECK = 4
 PART_POSCHECK = 5
 
@@ -27,22 +28,29 @@ PART_POSCHECK = 5
 class Store:
     """A storage class to get data from a sqlite database and write it back"""
 
-    def __init__(self, parent, project_path , board ):
+    def __init__(self, parent, project_path, board):
         self.logger = logging.getLogger(__name__)
         self.parent = parent
         self.project_path = project_path
-        self.datadir = os.path.join(self.project_path, "nextpcb")
+        self.datadir = os.path.join(self.project_path, "database")
         self.dbfile = os.path.join(self.datadir, "project.db")
         self.order_by = "reference"
         self.order_dir = "ASC"
         self.board = board
-        self.setup()
+        try:
+            self.setup()
+        except sqlite3.Error as e:
+            wx.MessageBox(
+                "Do not have write permission, please run kicad as administrator\r\n",
+                "Error",
+                style=wx.ICON_ERROR,
+            )
         # Call create_db function here,if database build false
         try:
             self.update_from_board()
         except sqlite3.Error as e:
             wx.MessageBox(
-                "database create error,delete the project cache folder : nextpcb\r\n",
+                "database create error,delete the project cache folder : datebase\r\n",
                 "Error",
                 style=wx.ICON_ERROR,
             )
@@ -89,7 +97,8 @@ class Store:
                     "mpn TEXT,"
                     "manufacturer TEXT,"
                     "category TEXT,"
-                    "SKU TEXT,"
+                    "sku TEXT,"
+                    "supplier TEXT,"
                     "quantity INT DEFAULT 1,"
                     "bomcheck INT DEFAULT 1,"
                     "poscheck INT DEFAULT 1,"
@@ -108,7 +117,7 @@ class Store:
                 return [
                     list(part)
                     for part in cur.execute(
-                       f"SELECT reference, value, footprint,  mpn, manufacturer, category, SKU, 1 as quantity,\
+                        f"SELECT reference, value, footprint,  mpn, manufacturer, category, sku, supplier, 1 as quantity,\
                             bomcheck, poscheck, rotation, side FROM part_info ORDER BY {self.order_by} COLLATE naturalsort {self.order_dir}"
                     ).fetchall()
                 ]
@@ -119,7 +128,7 @@ class Store:
             con.create_collation("naturalsort", natural_sort_collation)
             with con as cur:
                 query = f"SELECT GROUP_CONCAT(reference), value, footprint, mpn, manufacturer, \
-                category, SKU, COUNT(*) as quantity, GROUP_CONCAT(bomcheck), GROUP_CONCAT(poscheck), GROUP_CONCAT(rotation), \
+                category, sku, supplier, COUNT(*) as quantity, GROUP_CONCAT(bomcheck), GROUP_CONCAT(poscheck), GROUP_CONCAT(rotation), \
                  GROUP_CONCAT(side) FROM part_info GROUP BY value, footprint, mpn, manufacturer \
                 ORDER BY {self.order_by} COLLATE naturalsort {self.order_dir}"
                 a = [list(part) for part in cur.execute(query).fetchall()]
@@ -131,7 +140,7 @@ class Store:
             con.create_collation("naturalsort", natural_sort_collation)
             with con as cur:
                 query = f"SELECT GROUP_CONCAT(reference), value, footprint, mpn, manufacturer, \
-                category, SKU, COUNT(*) as quantity FROM part_info \
+                category, sku, supplier, COUNT(*) as quantity FROM part_info \
                 GROUP BY value, footprint, mpn, manufacturer \
                 ORDER BY reference COLLATE naturalsort ASC "
                 a = [list(part) for part in cur.execute(query).fetchall()]
@@ -163,7 +172,10 @@ class Store:
         """Create a part in the database."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
-                cur.execute("INSERT INTO part_info VALUES (?,?,?,?,'','','','',?,?,'',?,'' )", part)
+                cur.execute(
+                    "INSERT INTO part_info VALUES (?,?,?,?,'','','','','',?,?,'',?,'' )",
+                    part,
+                )
                 cur.commit()
 
     def update_part(self, part):
@@ -173,8 +185,10 @@ class Store:
                 if len(part) == 7:
                     cur.execute(
                         "UPDATE part_info set value = ?, footprint = ?,  mpn = '', manufacturer = '', \
-                        category = '',SKU = '', quantity = '', bomcheck = ?, poscheck = ?, rotation = '', side = ?, part_detail = '' WHERE reference = ?",
-                        part[PART_VALUE:PART_MPN] + part[PART_BOMCHECK:] + part[PART_REFERENCE:PART_VALUE],
+                        category = '',sku = '', supplier = '', quantity = '', bomcheck = ?, poscheck = ?, rotation = '', side = ?, part_detail = '' WHERE reference = ?",
+                        part[PART_VALUE:PART_MPN]
+                        + part[PART_BOMCHECK:]
+                        + part[PART_REFERENCE:PART_VALUE],
                     )
                 else:
                     cur.execute(
@@ -216,7 +230,7 @@ class Store:
                 )
                 cur.commit()
 
-    def set_MPN(self, ref, value):
+    def set_mpn(self, ref, value):
         """Change the BOM attribute for a part in the database."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
@@ -242,7 +256,7 @@ class Store:
                     f"UPDATE part_info SET manufacturer = '{value}' WHERE reference = '{ref}'"
                 )
                 cur.commit()
-    
+
     def set_category(self, ref, value):
         """Change the BOM attribute for a part in the database."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
@@ -252,32 +266,41 @@ class Store:
                 )
                 cur.commit()
 
-    def set_SKU(self, ref, value):
+    def set_sku(self, ref, value):
         """Change the BOM attribute for a part in the database."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
                 cur.execute(
-                    f"UPDATE part_info SET SKU = '{value}' WHERE reference = '{ref}'"
+                    f"UPDATE part_info SET sku = '{value}' WHERE reference = '{ref}'"
                 )
                 cur.commit()
-            
+
+    def set_supplier(self, ref, value):
+        """Change the BOM attribute for a part in the database."""
+        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
+            with con as cur:
+                cur.execute(
+                    f"UPDATE part_info SET supplier = '{value}' WHERE reference = '{ref}'"
+                )
+                cur.commit()
 
     def print_part_info(self, ref):
         """Print the information for a part in the database."""
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
-                cur = con.cursor()  # Create a cursor here
-                cur.execute(f"SELECT * FROM part_info WHERE reference = '{ref}'")
-                rows = cur.fetchall()
+            cur = con.cursor()  # Create a cursor here
+            cur.execute(f"SELECT * FROM part_info WHERE reference = '{ref}'")
+            rows = cur.fetchall()
 
-                if not rows:
-                    print(f"No data found for reference: {ref}")
-                else:
-                    # Assuming the columns in your part_info table are, for example, reference, SKU, and category
-                    print("  MPN   | Manufacturer   | Category  |  SKU  | details")
-                    print("--------------------------------")
-                    for row in rows:
-                        print(f"{row[3]:<10} | {row[4]:<10} | {row[5]:<10} | {row[6]:<10} | {row[12]} ")
-
+            if not rows:
+                print(f"No data found for reference: {ref}")
+            else:
+                # Assuming the columns in your part_info table are, for example, reference, SKU, and category
+                print("  MPN   | Manufacturer   | Category  |  SKU  | details")
+                print("--------------------------------")
+                for row in rows:
+                    print(
+                        f"{row[3]:<10} | {row[4]:<10} | {row[5]:<10} | {row[6]:<10} | {row[12]} "
+                    )
 
     def set_part_detail(self, ref, value):
         """Change the BOM attribute for a part in the database."""
@@ -286,10 +309,10 @@ class Store:
             with con as cur:
                 cur.execute(
                     "UPDATE part_info SET part_detail = ? WHERE reference = ?",
-                    (value, ref)
+                    (value, ref),
                 )
-                cur.commit()       
-            self.print_part_info(ref)   
+                cur.commit()
+            self.print_part_info(ref)
 
     def get_part_detail(self, ref):
         """Get a part from the database by its reference."""
@@ -310,7 +333,7 @@ class Store:
                 get_lcsc_value(fp),
                 int(not get_exclude_from_bom(fp)),
                 int(not get_exclude_from_pos(fp)),
-                fp.GetLayer()
+                fp.GetLayer(),
             ]
             dbpart = self.get_part(part[PART_REFERENCE])
             # if part is not in the database yet, create it
@@ -320,32 +343,31 @@ class Store:
                 )
                 self.create_part(part)
             else:
-                #if the board part matches the dbpart except for the LCSC and the stock value,
-                if part[PART_REFERENCE:PART_FOOTPRINT] == list(dbpart[0:2]) and part[PART_BOMCHECK:PART_POSCHECK] == [
-                    bool(x) for x in dbpart[8:9]
-                ]:
-                    #if part in the database, has no mpn value the board part has a mpn value, update including mpn
+                # if the board part matches the dbpart except for the LCSC and the stock value,
+                if part[PART_REFERENCE:PART_FOOTPRINT] == list(dbpart[0:2]) and part[
+                    PART_BOMCHECK:PART_POSCHECK
+                ] == [bool(x) for x in dbpart[9:10]]:
+                    # if part in the database, has no mpn value the board part has a mpn value, update including mpn
                     if dbpart and not dbpart[3]:
                         self.logger.debug(
                             f"Part {part[PART_REFERENCE]} is already in the database but without mpn value, so the value supplied from the board will be set."
                         )
                         self.update_part(part)
-                    #if part in the database, has a mpn value
+                    # if part in the database, has a mpn value
                     elif dbpart and dbpart[3]:
-                        #update mpn value as well if setting is accordingly
+                        # update mpn value as well if setting is accordingly
                         part.pop(PART_MPN)
                         self.logger.debug(
                             f"Part {part[PART_REFERENCE]} is already in the database and has a mpn value, the value supplied from the board will be ignored."
                         )
                         self.update_part(part)
                 else:
-                    #If something changed, we overwrite the part and dump the mpn value or use the one supplied by the board
+                    # If something changed, we overwrite the part and dump the mpn value or use the one supplied by the board
                     self.logger.debug(
                         f"Part {part[PART_REFERENCE]} is already in the database but value, footprint, bom or pos values changed in the board file, part will be updated, mpn overwritten/cleared."
                     )
                     self.update_part(part)
-                    # self.import_legacy_assignments()
-        # self.clean_database()
+        self.clean_database()
 
     def clean_database(self):
         """Delete all parts from the database that are no longer present on the board."""
@@ -360,37 +382,5 @@ class Store:
     def clear_database(self):
         with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
             with con as cur:
-                cur.execute(
-                    f"DELETE FROM part_info"
-                )
+                cur.execute(f"DELETE FROM part_info")
                 cur.commit()
-
-    def insert_mappings_data(self, Reference_data):
-        """Insert a mapping into the database."""
-        # self.references = Reference.split(',')
-        # for ref in self.references:
-        with contextlib.closing(sqlite3.connect(self.dbfile)) as con:
-            with con as cur:
-                cur.execute("INSERT INTO part_info VALUES (?,?,?,?,?,?,?,'','','','','' )", 
-                                Reference_data)
-                cur.commit()
-
-
-
-    def import_legacy_assignments(self):
-        """Check if assignments of an old version are found and merge them into the database."""
-        csv_file = os.path.join(self.project_path, "nextpcb", "part_assignments.csv")
-        if os.path.isfile(csv_file):
-            with open(csv_file) as f:
-                csvreader = csv.DictReader(
-                    f, fieldnames=("reference", "mpn", "bom", "pos")
-                )
-                for row in csvreader:
-                    self.set_MPN(row["reference"], row["mpn"])
-                    self.set_bom(row["reference"], row["bom"])
-                    self.set_pos(row["reference"], row["pos"])
-                    self.logger.debug(
-                        f"Update {row['reference']} from legacy 'part_assignments.csv'"
-                    )
-            os.rename(csv_file, f"{csv_file}.backup")
-

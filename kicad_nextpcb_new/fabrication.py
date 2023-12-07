@@ -4,6 +4,7 @@ import os
 import re
 from pathlib import Path
 from zipfile import ZipFile
+import wx
 
 from pcbnew import (
     EXCELLON_WRITER,
@@ -34,7 +35,7 @@ from .helpers import get_exclude_from_pos, get_footprint_by_ref, get_smd, is_nig
 
 
 class Fabrication:
-    def __init__(self, parent ,board):
+    def __init__(self, parent, board):
         self.parent = parent
         self.logger = logging.getLogger(__name__)
         self.board = board
@@ -261,7 +262,7 @@ class Fabrication:
     def generate_cpl(self):
         """Generate placement file (CPL)."""
         cplname = f"CPL-{self.filename.split('.')[0]}.csv"
-        #self.corrections = self.parent.library.get_all_correction_data()
+        # self.corrections = self.parent.library.get_all_correction_data()
         aux_orgin = self.board.GetDesignSettings().GetAuxOrigin()
         with open(
             os.path.join(self.outputdir, cplname), "w", newline="", encoding="utf-8"
@@ -282,8 +283,8 @@ class Fabrication:
                             part[2],
                             ToMM(position.x),
                             ToMM(position.y) * -1,
-                            '',
-                            #self.fix_rotation(fp),
+                            "",
+                            # self.fix_rotation(fp),
                             "top" if fp.GetLayer() == 0 else "bottom",
                         ]
                     )
@@ -300,3 +301,10 @@ class Fabrication:
             for part in self.parent.store.read_bom_parts():
                 writer.writerow(part)
         self.logger.info("Finished generating BOM file")
+
+    def path_message(self):
+        wx.MessageBox(
+            f"Generate finished. file path : {self.outputdir}",
+            "Info",
+            style=wx.ICON_INFORMATION,
+        )
