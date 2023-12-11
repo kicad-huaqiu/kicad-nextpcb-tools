@@ -262,7 +262,6 @@ class Fabrication:
     def generate_cpl(self):
         """Generate placement file (CPL)."""
         cplname = f"CPL-{self.filename.split('.')[0]}.csv"
-        # self.corrections = self.parent.library.get_all_correction_data()
         aux_orgin = self.board.GetDesignSettings().GetAuxOrigin()
         with open(
             os.path.join(self.outputdir, cplname), "w", newline="", encoding="utf-8"
