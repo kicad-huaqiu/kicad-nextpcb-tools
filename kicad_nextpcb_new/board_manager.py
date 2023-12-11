@@ -1,35 +1,37 @@
-from pcbnew import GetBoard , LoadBoard
+from pcbnew import GetBoard, LoadBoard
 import wx
 import os
 
-class BoardManager : 
-    def __init__(self , board) -> None:
-        if board  is None:
-             raise("Empty kicad pcb board!")
+
+class BoardManager:
+    def __init__(self, board) -> None:
+        if board is None:
+            raise ("Empty kicad pcb board!")
         self._board = board
 
     @property
     def board(self):
         return self._board
-        
+
+
 def load_board_manager():
-    for fp in   'C:\\Program Files\\KiCad\\7.0\\share\\kicad\\demos\\ecc83\\ecc83-pp.kicad_pcb',"D:\\KiCad7.0\\share\\kicad\\demos\\test_xil_95108\\carte_test.kicad_pcb":
-        if os.path.exists(fp):
-            return LoadBoard(fp)
-    #Setup board
+    # Setup board
     board = GetBoard()
     if board:
         return board
     else:
         dlg = wx.FileDialog(
-            None, message="Choose a kicad pcb file",
+            None,
+            message="Choose a kicad pcb file",
             defaultDir=os.getcwd(),
             defaultFile="",
             wildcard="*.kicad_pcb",
-            style=wx.FD_OPEN | wx.FD_MULTIPLE |
-                wx.FD_CHANGE_DIR | wx.FD_FILE_MUST_EXIST |
-                wx.FD_PREVIEW
-            )
+            style=wx.FD_OPEN
+            | wx.FD_MULTIPLE
+            | wx.FD_CHANGE_DIR
+            | wx.FD_FILE_MUST_EXIST
+            | wx.FD_PREVIEW,
+        )
 
         # Show the dialog and retrieve the user response. If it is the OK response,
         # process the data.
@@ -37,6 +39,6 @@ def load_board_manager():
             # This returns a Python list of files that were selected.
             paths = dlg.GetPaths()
             if len(paths):
-                    board = LoadBoard(paths[0])
-        dlg.Destroy()            
+                board = LoadBoard(paths[0])
+        dlg.Destroy()
         return board
