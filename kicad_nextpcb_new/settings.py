@@ -14,7 +14,7 @@ class SettingsDialog(wx.Dialog):
             id=wx.ID_ANY,
             title="NextPCB tools settings",
             pos=wx.DefaultPosition,
-            size=HighResWxSize(parent.window, wx.Size(1400, 800)),
+            size=HighResWxSize(parent.window, wx.Size(1200, 800)),
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER | wx.MAXIMIZE_BOX,
         )
 
@@ -169,7 +169,7 @@ class SettingsDialog(wx.Dialog):
         self.lcsc_priority_setting = wx.CheckBox(
             self,
             id=wx.ID_ANY,
-            label="LCSC number priority",
+            label="MPN number priority",
             pos=wx.DefaultPosition,
             size=wx.DefaultSize,
             style=0,
@@ -178,7 +178,7 @@ class SettingsDialog(wx.Dialog):
 
         self.lcsc_priority_setting.SetToolTip(
             wx.ToolTip(
-                "Whether LCSC number from schematic should overrule those in the database"
+                "Whether nextPCB number from schematic should overrule those in the database"
             )
         )
 
@@ -284,7 +284,7 @@ class SettingsDialog(wx.Dialog):
         if priority:
             self.lcsc_priority_setting.SetValue(priority)
             self.lcsc_priority_setting.SetLabel(
-                "LCSC numbers from schematic have priority"
+                "MPN numbers from schematic have priority"
             )
             self.lcsc_priority_image.SetBitmap(
                 loadBitmapScaled("schematic.png", self.parent.scale_factor, static=True)
@@ -292,7 +292,7 @@ class SettingsDialog(wx.Dialog):
         else:
             self.lcsc_priority_setting.SetValue(priority)
             self.lcsc_priority_setting.SetLabel(
-                "LCSC numbers from database have priority"
+                "MPN numbers from database have priority"
             )
             self.lcsc_priority_image.SetBitmap(
                 loadBitmapScaled(

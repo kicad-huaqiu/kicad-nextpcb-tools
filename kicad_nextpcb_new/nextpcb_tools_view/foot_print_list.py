@@ -6,17 +6,18 @@ from kicad_nextpcb_new.helpers import (
     HighResWxSize,
 )
 
+
 class FootPrintList(wx.dataview.DataViewListCtrl):
     def __init__(
-            self,
-            parent,
-            mainwindows,
-            id=wx.ID_ANY,
-            pos=wx.DefaultPosition,
-            size=wx.DefaultSize,
-            style=wx.dataview.DV_MULTIPLE):
-        wx.dataview.DataViewListCtrl.__init__(
-            self, parent, id, pos, size, style)
+        self,
+        parent,
+        mainwindows,
+        id=wx.ID_ANY,
+        pos=wx.DefaultPosition,
+        size=wx.DefaultSize,
+        style=wx.dataview.DV_MULTIPLE,
+    ):
+        wx.dataview.DataViewListCtrl.__init__(self, parent, id, pos, size, style)
 
         self.SetMinSize(HighResWxSize(mainwindows.window, wx.Size(900, 400)))
         self.idx = self.AppendTextColumn(
@@ -50,7 +51,7 @@ class FootPrintList(wx.dataview.DataViewListCtrl):
         self.lcsc = self.AppendTextColumn(
             "MPN",
             mode=wx.dataview.DATAVIEW_CELL_INERT,
-            width=int(mainwindows.scale_factor * 100),
+            width=int(mainwindows.scale_factor * 200),
             align=wx.ALIGN_CENTER,
             flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
         )
@@ -62,9 +63,30 @@ class FootPrintList(wx.dataview.DataViewListCtrl):
             flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
         )
         self.stock = self.AppendTextColumn(
-            "Description",
+            "Category",
             mode=wx.dataview.DATAVIEW_CELL_INERT,
             width=int(mainwindows.scale_factor * 200),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.stock = self.AppendTextColumn(
+            "SKU",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=int(mainwindows.scale_factor * 150),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.stock = self.AppendTextColumn(
+            "Supplier",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=int(mainwindows.scale_factor * 150),
+            align=wx.ALIGN_CENTER,
+            flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
+        )
+        self.stock = self.AppendTextColumn(
+            "Quantity",
+            mode=wx.dataview.DATAVIEW_CELL_INERT,
+            width=int(mainwindows.scale_factor * 80),
             align=wx.ALIGN_CENTER,
             flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
         )
@@ -96,7 +118,7 @@ class FootPrintList(wx.dataview.DataViewListCtrl):
             align=wx.ALIGN_CENTER,
             flags=wx.dataview.DATAVIEW_COL_RESIZABLE,
         )
-        
+
         self.AppendTextColumn(
             "",
             mode=wx.dataview.DATAVIEW_CELL_INERT,
